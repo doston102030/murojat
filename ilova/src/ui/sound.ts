@@ -3,6 +3,7 @@
    Brauzer ovozga faqat foydalanuvchi bosgandan keyin ruxsat beradi, shuning uchun AudioContext faqat unlock()'da
    (bosish yoki tugma hodisasi ichida) yaratiladi. Ruxsat bo'lmasa yoki ovoz o'chirilgan bo'lsa — jim, xatosiz. */
 import { useSyncExternalStore } from 'react';
+import SALOM from './salom.mp3';            // «Assalomu alaykum, Doston aka! Xush kelibsiz!» (Madina ovozi), yig'ishda faylga joylanadi
 
 export type SoundName = 'start' | 'click' | 'tab' | 'menu' | 'drop' | 'ok' | 'okSmall' | 'warn' | 'bad' | 'save' | 'done' | 'on' | 'off';
 
@@ -14,6 +15,9 @@ let ctx: AudioContext | null = null;
 let dry: GainNode | null = null;          // to'g'ridan-to'g'ri chiqish
 let wet: DelayNode | null = null;         // xona aks-sadosi kirishi
 let noiseBuf: AudioBuffer | null = null;
+let out: AudioNode | null = null;         // vaqtincha boshqa chiqish (kirish kuyini salom paytida pasaytirish uchun)
+let startBus: GainNode | null = null;
+let voice: Promise<{ buf: AudioBuffer; end: number } | null> | null = null;   // end — gap tugaydigan joy (s), oxiridagi sukutsiz
 const lastAt = new Map<SoundName, number>();
 
 const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
@@ -56,7 +60,7 @@ function tone(t: number, f: number, dur: number, o: ToneOpt = {}) {
   g.gain.linearRampToValueAtTime(v, t + a);
   if (o.decay !== false) g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   else { g.gain.setValueAtTime(v, t + Math.max(a, dur * 0.6)); g.gain.linearRampToValueAtTime(0.0001, t + dur); }
-  osc.connect(g); g.connect(dry!);
+  osc.connect(g); g.connect(out ?? dry!);
   if (o.echo) g.connect(wet!);
   osc.start(t); osc.stop(t + dur + 0.05);
 }
@@ -85,7 +89,7 @@ function noise(t: number, dur: number, o: NoiseOpt = {}) {
   g.gain.setValueAtTime(0.0001, t);
   g.gain.linearRampToValueAtTime(v, t + a);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(flt); flt.connect(g); g.connect(dry!);
+  src.connect(flt); flt.connect(g); g.connect(out ?? dry!);
   src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.05);
 }
 
@@ -133,8 +137,56 @@ const SFX: Record<SoundName, (t: number) => void> = {
   done: t => { [79, 84, 91].forEach((n, i) => bell(t + i * 0.09, midi(n), 0.8, 0.12)); },
   on: t => { bell(t, midi(79), 0.3, 0.09, false); bell(t + 0.08, midi(86), 0.4, 0.09, false); },
   off: t => { bell(t, midi(86), 0.3, 0.09, false); bell(t + 0.08, midi(79), 0.4, 0.09, false); },
-  start: startup,
+  start: t => {                                   // kuy alohida yo'ldan: salom paytida pasaytiriladi
+    const c = ctx!;
+    startBus = c.createGain(); startBus.gain.value = 1; startBus.connect(dry!);
+    out = startBus;
+    try { startup(t); } finally { out = null; }
+  },
 };
+
+/** Salom ovozini (mp3) bir marta ochib, AudioBuffer qiladi va gap qayerda tugashini topadi */
+function loadVoice(c: AudioContext): Promise<{ buf: AudioBuffer; end: number } | null> {
+  voice ??= (async () => {
+    try {
+      let buf: ArrayBuffer;
+      if (SALOM.startsWith('data:')) {
+        const bin = atob(SALOM.slice(SALOM.indexOf(',') + 1)), u = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        buf = u.buffer;
+      } else buf = await (await fetch(SALOM)).arrayBuffer();
+      const b = await c.decodeAudioData(buf), ch = b.getChannelData(0);
+      let peak = 0;
+      for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
+      let last = ch.length - 1;
+      while (last > 0 && Math.abs(ch[last]) < peak * 0.03) last--;
+      return { buf: b, end: Math.min(b.duration, last / b.sampleRate + 0.15) };
+    } catch { return null; }
+  })();
+  return voice;
+}
+
+/** «Assalomu alaykum, Doston aka! Xush kelibsiz!» — kirish kuyi ustidan. Ovoz davomiyligini (s) qaytaradi, chalinmasa 0. */
+export async function greet(delay = 0.55): Promise<number> {
+  const c = ctx;
+  if (!enabled || !c) return 0;
+  const v = await loadVoice(c);
+  if (!v || ctx !== c || !enabled) return 0;
+  const b = v.buf;
+  try {
+    const t = c.currentTime + delay;
+    const src = c.createBufferSource(), g = c.createGain(), send = c.createGain();
+    src.buffer = b; g.gain.value = 2.1; send.gain.value = 0.12;
+    src.connect(g); g.connect(dry!); g.connect(send); send.connect(wet!);
+    src.start(t);
+    if (startBus) {                               // kuyni salom davomida pasaytirib, keyin qaytaradi
+      const k = startBus.gain;
+      k.setValueAtTime(1, t - 0.25); k.linearRampToValueAtTime(0.32, t + 0.05);
+      k.setValueAtTime(0.32, t + v.end - 0.2); k.linearRampToValueAtTime(0.9, t + v.end + 0.5);
+    }
+    return delay + v.end;
+  } catch { return 0; }
+}
 
 /** Ovozni chalish. delay — soniyalarda. Bir xil ovoz 70 ms ichida qayta chalinmaydi (masalan, label + input bosilishi). */
 export function play(name: SoundName, delay = 0) {
@@ -153,6 +205,7 @@ export function unlock() {
   if (!enabled) return;
   const c = ensure();
   if (c && c.state === 'suspended') c.resume().catch(() => {});
+  if (c) void loadVoice(c);                       // salomni oldindan tayyorlab qo'yadi
 }
 
 export const soundOn = () => enabled;

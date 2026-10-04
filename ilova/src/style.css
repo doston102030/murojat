@@ -370,7 +370,9 @@ tfoot td { font-weight: 700; background: linear-gradient(#f3f6fa, #dfe7f0); bord
 .boot-hint { font-size: 12.5px; color: #d6e9fb; text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
 .boot-mute { padding: 4px; border: 0; background: none; color: #cfe3f8; font: 12.5px var(--font); text-decoration: underline; cursor: pointer; }
 .boot-mute:hover, .boot-mute:focus-visible { color: #fff; outline: 1px dotted #fff; }
-.boot-wel { display: flex; align-items: center; gap: 12px; margin-top: 8px; font: 300 24px/1.2 var(--font); text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.boot-wel { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 6px; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.boot-salom { font: 400 22px/1.25 var(--font); color: #fff; animation: fadeUp .5s ease-out backwards; }
+.boot-xush { display: flex; align-items: center; gap: 12px; font: 300 24px/1.2 var(--font); color: #e3f1ff; animation: fadeUp .5s .35s ease-out backwards; }
 .boot-brand { position: relative; display: flex; align-items: center; gap: 8px; margin: 0 0 22px; font: 300 18px var(--font); color: rgba(255, 255, 255, .88); text-shadow: 0 1px 2px rgba(0, 0, 0, .5); }
 .boot-brand b { font-weight: 600; }
 .boot.bye { animation: bootOut .38s ease-in forwards; }

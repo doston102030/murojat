@@ -8,7 +8,7 @@ import { Icon, IconDefs } from './ui/icons';
 import { Inputs } from './ui/Inputs';
 import { Output } from './ui/Output';
 import { loadLast, loadRules, loadShared, pushLast, pushRules, saveFile, saveLast, saveRules, type RulePair } from './ui/platform';
-import { play, setSound, soundOn, unlock, type SoundName } from './ui/sound';
+import { greet, play, setSound, soundOn, unlock, type SoundName } from './ui/sound';
 import { initState, phaseOf, readyResult, reducer } from './ui/state';
 import { Taskbar } from './ui/Taskbar';
 
@@ -23,8 +23,12 @@ export function App() {
   /* kirish ekrani: ovoz yoqilgan bo'lsa chiqadi (bosish brauzerga ovoz ruxsatini beradi); avtomatik testda chiqmaydi */
   const [boot, setBoot] = useState(() => soundOn() && !navigator.webdriver);
   const [enter, setEnter] = useState(false);
-  const onBootSound = useCallback((withSound: boolean) => {
-    if (withSound) { unlock(); play('start'); } else setSound(false, true);
+  /* «Boshlash» bosildi: kuy + salom. Xush kelibsiz ekrani salom tugaguncha turadi (ms qaytaradi). */
+  const onBootSound = useCallback(async (withSound: boolean) => {
+    if (!withSound) { setSound(false, true); return 900; }
+    unlock(); play('start');
+    const sec = await greet();
+    return Math.max(1300, Math.round(sec * 1000) + 300);
   }, []);
   const onBootDone = useCallback(() => { setBoot(false); setEnter(true); }, []);
 

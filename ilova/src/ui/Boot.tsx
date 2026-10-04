@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './icons';
 
-export function Boot({ onSound, onDone }: { onSound(sound: boolean): void; onDone(): void }) {
+export function Boot({ onSound, onDone }: { onSound(sound: boolean): Promise<number>; onDone(): void }) {
   const [stage, setStage] = useState<'login' | 'welcome' | 'bye'>('login');
   const go = useRef<HTMLButtonElement>(null);
   const stageRef = useRef(stage);
@@ -11,9 +11,8 @@ export function Boot({ onSound, onDone }: { onSound(sound: boolean): void; onDon
 
   const start = (sound: boolean) => {
     if (stageRef.current !== 'login') return;
-    onSound(sound);
     setStage('welcome');
-    window.setTimeout(() => setStage('bye'), sound ? 1300 : 450);
+    void onSound(sound).then(ms => window.setTimeout(() => setStage('bye'), ms), () => setStage('bye'));
   };
   const startRef = useRef(start);
   startRef.current = start;
@@ -45,7 +44,10 @@ export function Boot({ onSound, onDone }: { onSound(sound: boolean): void; onDon
             <button type="button" id="bootMute" className="boot-mute" data-snd="none" onClick={e => { e.stopPropagation(); start(false); }}>Ovozsiz boshlash</button>
           </>
         ) : (
-          <p className="boot-wel" role="status"><Icon name="busy" size={26} className="spin" />Xush kelibsiz</p>
+          <div className="boot-wel" role="status">
+            <p className="boot-salom">Assalomu alaykum, Doston aka!</p>
+            <p className="boot-xush"><Icon name="busy" size={26} className="spin" />Xush kelibsiz</p>
+          </div>
         )}
       </div>
       <p className="boot-brand"><Icon name="logo" size={22} /><span>Jarayon svodi <b>2.0</b></span></p>
