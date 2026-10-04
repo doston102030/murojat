@@ -3,7 +3,7 @@
    Brauzer ovozga faqat foydalanuvchi bosgandan keyin ruxsat beradi, shuning uchun AudioContext faqat unlock()'da
    (bosish yoki tugma hodisasi ichida) yaratiladi. Ruxsat bo'lmasa yoki ovoz o'chirilgan bo'lsa — jim, xatosiz. */
 import { useSyncExternalStore } from 'react';
-import SALOM from './salom.mp3';            // «Assalomu alaykum, Doston aka! Xush kelibsiz!» (Madina ovozi), yig'ishda faylga joylanadi
+import SALOM from './salom.mp3';            // «Assalomu alaykum, Bahodir To'xtasinov! Xush kelibsiz!» (Madina ovozi), yig'ishda faylga joylanadi
 
 export type SoundName = 'start' | 'click' | 'tab' | 'menu' | 'drop' | 'ok' | 'okSmall' | 'warn' | 'bad' | 'save' | 'done' | 'on' | 'off';
 
@@ -166,7 +166,7 @@ function loadVoice(c: AudioContext): Promise<{ buf: AudioBuffer; end: number } |
   return voice;
 }
 
-/** «Assalomu alaykum, Doston aka! Xush kelibsiz!» — kirish kuyi ustidan. Ovoz davomiyligini (s) qaytaradi, chalinmasa 0. */
+/** «Assalomu alaykum, Bahodir To'xtasinov! Xush kelibsiz!» — kirish kuyi ustidan. Ovoz davomiyligini (s) qaytaradi, chalinmasa 0. */
 export async function greet(delay = 0.55): Promise<number> {
   const c = ctx;
   if (!enabled || !c) return 0;

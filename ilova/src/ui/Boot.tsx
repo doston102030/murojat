@@ -45,7 +45,7 @@ export function Boot({ onSound, onDone }: { onSound(sound: boolean): Promise<num
           </>
         ) : (
           <div className="boot-wel" role="status">
-            <p className="boot-salom">Assalomu alaykum, Doston aka!</p>
+            <p className="boot-salom">Assalomu alaykum, Bahodir To'xtasinov!</p>
             <p className="boot-xush"><Icon name="busy" size={26} className="spin" />Xush kelibsiz</p>
           </div>
         )}

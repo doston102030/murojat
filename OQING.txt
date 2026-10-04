@@ -26,7 +26,7 @@ DIZAYN (2010 USLUBI) VA OVOZLAR
   burchagi ko'tarilgan qog'ozdagi svod, pastda Windows 7 paneli (menyu shari, holat, ovoz, soat).
 - Sahifa ochilganda "Xush kelibsiz" ekrani chiqadi: "Boshlash" yoki Enter tugmasini bosing.
   Bu bosish brauzerga ovoz uchun ruxsat beradi (brauzer bosishsiz ovoz chiqarmaydi).
-- Kirishda ayol ovozi (Madina) salom beradi: "Assalomu alaykum, Doston aka! Xush kelibsiz!"
+- Kirishda ayol ovozi (Madina) salom beradi: "Assalomu alaykum, Bahodir To'xtasinov! Xush kelibsiz!"
   (ovoz fayli ilova\src\ui\salom.mp3, sahifaning ichiga joylanadi - internet kerak emas).
 - Ovozlar (internetsiz, yumshoq qo'ng'iroqlar): kirish kuyi, tugma "tik"i, fayl tashlanganda,
   tayyor bo'lganda "ta-da", savol chiqqanda "ding-dong", xatoda past ovoz, saqlashda "vush".
