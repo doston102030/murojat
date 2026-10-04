@@ -1,0 +1,19 @@
+# Haqiqiy hisobotlar (fuqarolar ma'lumoti) - repozitoriy ochiq, bular hech qachon GitHub'ga chiqmaydi
+natija/
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+~$*
+*.reg
+
+# Eski versiya - endi ishlatilmaydi
+manba/
+_eski-versiya/
+
+# Yig'ish natijalari va vaqtinchalik fayllar (jarayon-svodi.html esa qoladi - tayyor sahifa)
+ilova/node_modules/
+ilova/dist/
+sayt/
+.vercel/
+*.log

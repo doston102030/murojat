@@ -1,0 +1,82 @@
+JARAYONDAGI MUROJAATLAR SVODI  (2-versiya: React + Web Worker)
+================================================================
+
+ISHLATISH
+1. "jarayon-svodi.html" faylini ikki marta bosing - brauzerda ochiladi.
+2. Portal ro'yxati yozilgan Excel (.xlsx) faylni sahifaga tashlang.
+3. "Excel faylni saqlash" tugmasini bosing - tayyor fayl yuklanadi.
+
+Internet shart emas. Fayl shu brauzerning o'zida ishlanadi, hech qayerga yuborilmaydi.
+Chrome, Edge yoki Firefox'ning yangi versiyasida ishlaydi.
+
+
+NIMA O'ZGARDI (1-versiyaga nisbatan)
+- Sahifa endi qotmaydi. Og'ir ish (Excel o'qish, yig'ish, tekshirish) alohida oqimda
+  (Web Worker) bajariladi. 20 000 qatorli faylda eng uzun qotish ~3,6 s edi, endi ~0,1 s.
+- Fayl 2-3 baravar tez tayyor bo'ladi (yangi, tez XML o'qigich).
+- "Murojaatlar" yorlig'i 20 000 qatorda ham bir zumda ochiladi: faqat ko'rinib turgan
+  qatorlar chiziladi.
+- Sana yoki son o'zgarsa, eski fayl darhol bloklanadi - noto'g'ri sanali fayl saqlanmaydi.
+- Oxirgi tayyor svod eslab qolinadi va keyingi ochilishda bosh sahifada ko'rinadi.
+- Tasnif qoidalaringiz saqlanib qoldi.
+
+
+DIZAYN (2010 USLUBI) VA OVOZLAR
+- Ko'rinish Windows 7 "Aero" uslubida: ko'k nurli fon, shisha ramkali oynalar, yaltiroq tugmalar,
+  burchagi ko'tarilgan qog'ozdagi svod, pastda Windows 7 paneli (menyu shari, holat, ovoz, soat).
+- Sahifa ochilganda "Xush kelibsiz" ekrani chiqadi: "Boshlash" yoki Enter tugmasini bosing.
+  Bu bosish brauzerga ovoz uchun ruxsat beradi (brauzer bosishsiz ovoz chiqarmaydi).
+- Ovozlar (internetsiz, yumshoq qo'ng'iroqlar): kirish kuyi, tugma "tik"i, fayl tashlanganda,
+  tayyor bo'lganda "ta-da", savol chiqqanda "ding-dong", xatoda past ovoz, saqlashda "vush".
+- Ovozni o'chirish: pastki o'ng burchakdagi karnay tugmasi yoki kirish ekranidagi
+  "Ovozsiz boshlash". Ovoz o'chiq bo'lsa, kirish ekrani ham chiqmaydi.
+
+
+SAYT (ISTALGAN KOMPYUTERDA): https://jarayon-svodi.vercel.app
+- Brauzerga shu manzilni yozing - ochiladi. Fayl ko'chirish, dastur o'rnatish kerak emas (internet kerak).
+- Excel fayllar baribir shu kompyuterning brauzerida ishlanadi, internetga yuborilmaydi.
+- Yangilash (kodni o'zgartirgandan keyin): ilova papkasida  npm run deploy
+  -> yig'adi va saytga joylaydi (Vercel hisobi: doston102030). Ochiq turgan sahifada F5 bosing.
+- Tasnif qoidalari har bir kompyuterning brauzerida alohida eslab qolinadi.
+
+
+CLAUDE HAVOLASI (QO'SHIMCHA)
+- Sahifa claude.ai'da ham turadi: https://claude.ai/artifact/RL8JjnbXXhPLaPZMTmMLcP
+- Yangi versiya chiqqanda o'sha havolaning o'zida yangilanadi - faylni qayta tarqatish shart emas.
+- Havola yopiq: hamkasblar ochishi uchun sahifadagi "Share" (Ulashish) menyusidan ularga ruxsat bering.
+- U yerda tasnif qoidalari hamma uchun umumiy. Excel fayllar baribir har kimning o'z brauzerida
+  ishlanadi; umumiy xotirada faqat qoidalar va oxirgi svod raqamlari (bo'limlar bo'yicha) turadi.
+- Tarmoqdagi papka: C:\svod papkasi bo'lsa, "npm run build" yangi faylni unga ham ko'chiradi
+  (hozircha ochilmagan - tarmoq "Public", ofis tarmog'i ekani aniq emas).
+
+
+PAPKADA NIMA BOR
+jarayon-svodi.html   - tayyor sahifa. Hamma narsa shu bitta faylda.
+ilova\               - manba kodi (React + TypeScript):
+    src\engine\      - dvigatel: xml.ts (XML o'qigich), core.ts (tasnif, yangi kelganlar,
+                       svod, solishtirish), xlsx.ts (Excel o'qish/yig'ish/tekshirish),
+                       host.ts + worker.ts (Web Worker), static.json (Excel shablon qolipi)
+    src\ui\          - interfeys: React komponentlari, holat (state.ts), Worker mijozi
+    src\style.css    - dizayn (2010, Windows 7 uslubi); ovozlar - src\ui\sound.ts
+    tests\           - avtomatik testlar (dvigatel, poyga holatlari, haqiqiy brauzerda to'liq oqim)
+_eski-versiya\       - 1-versiyaning zaxira nusxasi (keragi bo'lmasa o'chirish mumkin)
+manba\               - 1-versiyaning ESKI kodi. Endi ishlatilmaydi - o'chirib tashlang.
+                       DIQQAT: undagi "python yig.py" ni ishga tushirmang - u yangi
+                       jarayon-svodi.html ustidan eski versiyani yozib qo'yadi.
+
+
+KODNI O'ZGARTIRSANGIZ  (bir marta Node.js 22+ o'rnatilgan bo'lishi kerak: https://nodejs.org)
+1. ilova papkasida buyruq oynasini oching.
+2. Birinchi marta:            npm install
+3. O'zgartirib, yig'ish:      npm run build
+   -> loyiha papkasidagi jarayon-svodi.html yangilanadi.
+4. Tekshirish:                npm test            (dvigatel testlari)
+                              npm run test:e2e    (Chrome/Edge'da to'liq oqim, build'dan keyin)
+                              npm run check       (hammasi birga)
+Ishlab chiqish rejimi (o'zgarish darhol ko'rinadi): npm run dev
+
+
+TASNIF QOIDALARI
+Portal tasnifi svodda qaysi toifaga tushishi ilova\src\engine\core.ts ichidagi BASE_RULES
+ro'yxatida yozilgan. Sahifaning o'zida ham ("Tasnif qoidalari") o'zgartirish mumkin -
+u shu brauzerda eslab qolinadi.
