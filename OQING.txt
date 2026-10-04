@@ -6,6 +6,12 @@ ISHLATISH
 2. Portal ro'yxati yozilgan Excel (.xlsx) faylni sahifaga tashlang.
 3. "Excel faylni saqlash" tugmasini bosing - tayyor fayl yuklanadi.
 
+- Ro'yxat boshqa kunniki bo'lsa (masalan, kechagi fayl bugungi sana bilan), sahifa saqlashdan
+  oldin so'raydi: "Sanani ro'yxat kuni qilish" yoki "sana qolsin".
+- Tozalash: yuklangan faylni olib tashlash - 1-qutidagi "Tozalash - faylni olib tashlash".
+  Bosh sahifadagi "Oxirgi svod"ni o'chirish - uning ostidagi "Tozalash" tugmasi
+  (saqlangan Excel fayllarga tegmaydi).
+
 Internet shart emas. Fayl shu brauzerning o'zida ishlanadi, hech qayerga yuborilmaydi.
 Chrome, Edge yoki Firefox'ning yangi versiyasida ishlaydi.
 

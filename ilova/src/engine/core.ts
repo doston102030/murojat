@@ -103,6 +103,11 @@ export function fmtSerial(serial: unknown, withSec = false): string {
   const p = serialParts(serial);
   return `${pad2(p.d)}.${pad2(p.m)}.${p.y} ${pad2(p.hh)}:${pad2(p.mm)}` + (withSec ? `:${pad2(p.ss)}` : '');
 }
+/** Excel sana raqamining kuni: YYYY-MM-DD */
+export function serialDay(serial: number): string {
+  const p = serialParts(serial);
+  return `${p.y}-${pad2(p.m)}-${pad2(p.d)}`;
+}
 export function textToSerial(text: string): number | null {
   const t = norm(text);
   let m = t.match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);

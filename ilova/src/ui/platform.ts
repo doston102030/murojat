@@ -26,9 +26,10 @@ const isLast = (x: unknown): x is LastSvod => {
 };
 export const loadLast = (): LastSvod | null => read(LAST_KEY, isLast);
 export const saveLast = (last: LastSvod) => write(LAST_KEY, last);
+const forgetLocal = () => { try { localStorage.removeItem(LAST_KEY); } catch { /* xotira yopiq */ } };
 
 /* ---------------------------------------------------------------- Claude muhiti (bo'lmasa — jim) */
-interface DocRef { get(): Promise<{ exists: boolean; data(): unknown }>; set(v: unknown): Promise<unknown> }
+interface DocRef { get(): Promise<{ exists: boolean; data(): unknown }>; set(v: unknown): Promise<unknown>; delete(): Promise<unknown> }
 interface Db { doc(path: string): DocRef; collection(name: string): { get(): Promise<{ docs: Array<{ data(): unknown }> }>; doc(id: string): DocRef } }
 interface Downloads { save(o: { filename: string; data: Blob }): Promise<unknown> }
 type ClaudeRuntime = { use(name: string): unknown };
@@ -71,6 +72,12 @@ export async function pushRules(pairs: RulePair[]): Promise<boolean> {
 export async function pushLast(last: LastSvod) {
   const db = await pDb;
   if (db) db.doc('holat/oxirgi').set(last).catch(() => {});
+}
+/** Oxirgi svodni unutadi: shu brauzerda va umumiy xotirada */
+export async function forgetLast() {
+  forgetLocal();
+  const db = await pDb;
+  if (db) await db.doc('holat/oxirgi').delete().catch(() => {});
 }
 
 export interface SaveMsg { ok: boolean; text: string }

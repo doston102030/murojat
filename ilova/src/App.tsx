@@ -7,9 +7,9 @@ import { EngineClient } from './ui/client';
 import { Icon, IconDefs } from './ui/icons';
 import { Inputs } from './ui/Inputs';
 import { Output } from './ui/Output';
-import { loadLast, loadRules, loadShared, pushLast, pushRules, saveFile, saveLast, saveRules, type RulePair } from './ui/platform';
+import { forgetLast, loadLast, loadRules, loadShared, pushLast, pushRules, saveFile, saveLast, saveRules, type RulePair } from './ui/platform';
 import { greet, play, setSound, soundOn, unlock, type SoundName } from './ui/sound';
-import { initState, phaseOf, readyResult, reducer } from './ui/state';
+import { dateAsk, initState, phaseOf, readyResult, reducer } from './ui/state';
 import { Taskbar } from './ui/Taskbar';
 
 export function App() {
@@ -85,7 +85,7 @@ export function App() {
     if (s.exp.status !== 'ready') return;
     client.send({
       t: 'compute', seq: s.seq, expId: s.exp.id, prevId: s.prev.status === 'ready' ? s.prev.id : null,
-      rules: s.rules, newCount: s.newCount, confirmed: s.newOk && !s.editNew, date: s.date,
+      rules: s.rules, newCount: s.newCount, confirmed: s.newOk && !s.editNew && !dateAsk(s), date: s.date,
     });
   }, [s.seq, client]);            // seq barcha kiritishlarni qamraydi (reducer'dagi bump)
 
@@ -137,6 +137,17 @@ export function App() {
     dispatch({ type: 'clearPrev', id });
   }, [client]);
 
+  const onClearExp = useCallback(() => {
+    const id = ++ids.current.exp;
+    client.send({ t: 'clear', which: 'exp', id });
+    dispatch({ type: 'clearExp', id });
+  }, [client]);
+
+  const onForgetLast = useCallback(() => {
+    dispatch({ type: 'forgetLast' });
+    void forgetLast();
+  }, []);
+
   const onRules = useCallback((pairs: RulePair[]) => {
     dispatch({ type: 'setRules', pairs });
     void pushRules(pairs).then(ok => { if (!ok) dispatch({ type: 'note', note: 'Qoida shu brauzerda saqlandi, lekin umumiy xotiraga yozilmadi.' }); });
@@ -178,9 +189,9 @@ export function App() {
           </header>
           <div className="grid">
             <Inputs s={s} allCats={allCats} onFile={onFile} onDate={date => dispatch({ type: 'setDate', date })}
-              onClearPrev={onClearPrev} onRules={onRules} onAddCat={name => dispatch({ type: 'addCat', name })} />
+              onClearPrev={onClearPrev} onClearExp={onClearExp} onRules={onRules} onAddCat={name => dispatch({ type: 'addCat', name })} />
             <div className="col" id="out" aria-live="polite">
-              <Output s={s} dispatch={dispatch} allCats={allCats} onSave={onSave} onDedupe={onDedupe} onRules={onRules} />
+              <Output s={s} dispatch={dispatch} allCats={allCats} onSave={onSave} onDedupe={onDedupe} onRules={onRules} onForgetLast={onForgetLast} />
             </div>
           </div>
           <footer className="foot">

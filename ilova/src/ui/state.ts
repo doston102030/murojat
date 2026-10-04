@@ -1,6 +1,6 @@
 /* Sahifa holati — bitta reducer. Asosiy qoida: kiritilgan narsa o'zgarsa, seq oshadi va eski natija
    darhol bekor bo'ladi (saqlash tugmasi o'chadi). Dvigateldan kelgan javob faqat o'z seq/id'si mos kelsa qabul qilinadi. */
-import { norm, todayTashkent } from '../engine/core';
+import { norm, serialDay, todayTashkent } from '../engine/core';
 import type { Analysis, Built, ErrInfo, ExpInfo, TableInfo, Which } from '../engine/protocol';
 import type { LastSvod, RulePair, SaveMsg } from './platform';
 
@@ -16,6 +16,7 @@ export interface State {
   newCount: number;
   newOk: boolean;           // yangi kelganlar soni tasdiqlangan (yoki aniq topilgan)
   editNew: boolean;         // foydalanuvchi sonni qayta tahrirlamoqda
+  dateOk: boolean;          // ro'yxat boshqa kunniki, lekin hisobot sanasi atayin shunday qoldirilgan
   rules: RulePair[];        // foydalanuvchi qo'shgan qoidalar
   cats: string[];           // qo'lda qo'shilgan toifalar
   seq: number;
@@ -34,7 +35,7 @@ const idleBuild = (seq: number): BuildState => ({ seq, status: 'idle', result: n
 
 export function initState(rules: RulePair[], last: LastSvod | null): State {
   return {
-    exp: emptySlot(), prev: emptySlot(), date: todayTashkent(), newCount: 0, newOk: false, editNew: false,
+    exp: emptySlot(), prev: emptySlot(), date: todayTashkent(), newCount: 0, newOk: false, editNew: false, dateOk: false,
     rules, cats: [], seq: 1, analysis: null, build: idleBuild(1), saving: false, saveMsg: null, tab: 'svod',
     note: null, last, crash: null,
   };
@@ -46,8 +47,11 @@ export type Action =
   | { type: 'loaded'; which: 'prev'; id: number; info: TableInfo }
   | { type: 'loadError'; which: Which; id: number; error: ErrInfo }
   | { type: 'clearPrev'; id: number }
+  | { type: 'clearExp'; id: number }
+  | { type: 'forgetLast' }
   | { type: 'deduped'; id: number; info: ExpInfo }
   | { type: 'setDate'; date: string }
+  | { type: 'keepDate' }
   | { type: 'pickNew'; n: number }
   | { type: 'editNew' }
   | { type: 'setRules'; pairs: RulePair[] }
@@ -76,7 +80,7 @@ export function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'loadStart': {
       const slot = { id: a.id, name: a.name, status: 'loading' as const, info: null, error: null };
-      if (a.which === 'exp') return bump({ ...s, exp: slot, analysis: null, newCount: 0, newOk: false, editNew: false, tab: 'svod' });
+      if (a.which === 'exp') return bump({ ...s, exp: slot, analysis: null, newCount: 0, newOk: false, editNew: false, dateOk: false, tab: 'svod' });
       return bump({ ...s, prev: slot, tab: 'cmp' });
     }
     case 'loaded': {
@@ -96,12 +100,18 @@ export function reducer(s: State, a: Action): State {
     }
     case 'clearPrev':
       return bump({ ...s, prev: { ...emptySlot<TableInfo>(), id: a.id }, tab: s.tab === 'cmp' ? 'svod' : s.tab });
+    case 'clearExp':
+      return bump({ ...s, exp: { ...emptySlot<ExpInfo>(), id: a.id }, analysis: null, newCount: 0, newOk: false, editNew: false, dateOk: false, tab: 'svod' });
+    case 'forgetLast':
+      return { ...s, last: null };
     case 'deduped': {
       if (a.id !== s.exp.id || s.exp.status !== 'ready') return s;
       return bump({ ...s, exp: { ...s.exp, info: a.info }, newCount: a.info.det.count, newOk: a.info.det.sure, editNew: false });
     }
     case 'setDate':
-      return a.date === s.date ? s : bump({ ...s, date: a.date });
+      return a.date === s.date ? s : bump({ ...s, date: a.date, dateOk: false });
+    case 'keepDate':
+      return s.dateOk ? s : bump({ ...s, dateOk: true });
     case 'pickNew': {
       const max = s.exp.info ? s.exp.info.rowCount : 0;
       if (!Number.isInteger(a.n) || a.n < 0 || a.n > max) return s;
@@ -146,6 +156,16 @@ export function reducer(s: State, a: Action): State {
 }
 
 /* ---------------------------------------------------------------- hosila qiymatlar */
+/** Ro'yxat kuni (YYYY-MM-DD): «№» ustunidagi eng so'nggi yangilanish sanasi */
+export const listDay = (info: TableInfo | null): string | null => info && info.lastUpd !== null ? serialDay(info.lastUpd) : null;
+
+/** Ro'yxat boshqa kunniki va hisobot sanasi hali tasdiqlanmagan bo'lsa — ro'yxat kuni; aks holda null */
+export function dateAsk(s: State): string | null {
+  if (s.exp.status !== 'ready' || s.dateOk) return null;
+  const d = listDay(s.exp.info);
+  return d && d !== s.date ? d : null;
+}
+
 export const isBusy = (s: State) =>
   s.exp.status === 'loading' || s.prev.status === 'loading' ||
   (s.exp.status === 'ready' && (!s.analysis || s.analysis.seq !== s.seq)) || s.build.status === 'building';

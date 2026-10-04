@@ -28,11 +28,12 @@ export interface InputsProps {
   onFile(which: 'exp' | 'prev', f: File): void;
   onDate(date: string): void;
   onClearPrev(): void;
+  onClearExp(): void;
   onRules(pairs: Array<[string, string]>): void;
   onAddCat(name: string): void;
 }
 
-export function Inputs({ s, allCats, onFile, onDate, onClearPrev, onRules, onAddCat }: InputsProps) {
+export function Inputs({ s, allCats, onFile, onDate, onClearPrev, onClearExp, onRules, onAddCat }: InputsProps) {
   const [date, setDate] = useState(s.date);
   useEffect(() => { setDate(s.date); }, [s.date]);
   const [catNew, setCatNew] = useState('');
@@ -50,6 +51,7 @@ export function Inputs({ s, allCats, onFile, onDate, onClearPrev, onRules, onAdd
             : exp.status === 'error' ? <><strong>{exp.name}</strong><small>o'qilmadi — boshqa fayl tanlang</small></>
             : <Idle a="Excel faylni shu yerga tashlang" b="yoki tugmani bosib tanlang (.xlsx)" />}
         </FileDrop>
+        {exp.status === 'ready' || exp.status === 'error' ? <div className="row"><button type="button" className="btn link" id="expClear" onClick={onClearExp}>Tozalash — faylni olib tashlash</button></div> : null}
         <p className="hint">«жараён» varag'i: sarlavha qatori, ostida portaldagi ro'yxat. Yangi kelganlar ro'yxati eng pastda turadi.</p>
       </Win>
 

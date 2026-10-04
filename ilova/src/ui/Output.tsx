@@ -5,7 +5,7 @@ import type { ExpInfo } from '../engine/protocol';
 import { Check, Dlg, ErrText, MoreList, Spinner, StatusBox, Win, nf, type Kind } from './common';
 import { Icon, type IconName } from './icons';
 import { ComparePane, GhostSvod, Paper, RowsPane, SvodTable } from './panes';
-import { isBusy, phaseOf, readyResult, type Action, type State, type Tab } from './state';
+import { dateAsk, isBusy, listDay, phaseOf, readyResult, type Action, type State, type Tab } from './state';
 
 export interface OutputProps {
   s: State;
@@ -14,6 +14,7 @@ export interface OutputProps {
   onSave(): void;
   onDedupe(): void;
   onRules(pairs: Array<[string, string]>): void;
+  onForgetLast(): void;
 }
 
 const NEWCAT = '__yangi__';
@@ -89,6 +90,25 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
   );
 }
 
+/* ---------------------------------------------------------------- ro'yxat kuni ≠ hisobot sanasi */
+function DateBlock({ s, info, day, dispatch }: { s: State; info: ExpInfo; day: string; dispatch: Dispatch<Action> }) {
+  const want = dateLabels(s.date), got = dateLabels(day), old = day < s.date, k = s.newOk && !s.editNew ? s.newCount : 0;
+  const none = old && !info.rows.some(r => r.sent.startsWith(want.dmy) || r.upd.startsWith(want.dmy));
+  return (
+    <Check kind="warn" title={`Ro'yxat ${got.dmy} kuniniki, hisobot sanasi esa ${want.dmy}`}>
+      <div className="need" id="dateAsk">
+        <span>Ro'yxatdagi eng oxirgi yangilanish: {fmtSerial(info.lastUpd)}.{none ? ` ${want.dmy} kuni kelgan yoki yangilangan birorta murojaat yo'q.` : ''}</span>
+        {k ? <span>Shu holicha saqlansa, {old ? `${got.dmy} gacha kelgan ${nf(k)} ta murojaat` : `${nf(k)} ta yangi kelgan`} «{want.newCol}» bo'lib yoziladi.</span> : null}
+        {old ? <span>{want.dmy} hisoboti kerak bo'lsa, portaldan yangi ro'yxatni yuklab, shu yerga tashlang.</span> : null}
+        <div className="chips">
+          <button type="button" className="btn sm" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: day })}>Sanani {got.dmy} qilish</button>
+          <button type="button" className="btn sm" data-act="keepDate" onClick={() => dispatch({ type: 'keepDate' })}>{want.dmy} qolsin</button>
+        </div>
+      </div>
+    </Check>
+  );
+}
+
 /* ---------------------------------------------------------------- noma'lum tasniflar */
 function UnknownBlock({ unknown, allCats, onRules }: { unknown: Array<{ text: string; count: number }>; allCats: string[]; onRules(p: Array<[string, string]>): void }) {
   const [pick, setPick] = useState<Record<string, string>>({});
@@ -135,7 +155,7 @@ function UnknownBlock({ unknown, allCats, onRules }: { unknown: Array<{ text: st
 }
 
 /* ---------------------------------------------------------------- bo'sh holat */
-function Idle({ s, allCats }: { s: State; allCats: string[] }) {
+function Idle({ s, allCats, onForget }: { s: State; allCats: string[]; onForget(): void }) {
   const L = s.last;
   if (L && L.svod.orgs.length) {
     let dmy = L.sana, sheet = L.sana;
@@ -149,6 +169,7 @@ function Idle({ s, allCats }: { s: State; allCats: string[] }) {
             <div className="kpi"><b>{L.svod.orgs.length}</b><span>bo'lim</span></div>
           </div></div>
           <p className="hint">Bu oxirgi marta tayyorlangan svod. Yangi ro'yxatni tashlasangiz, shu joy yangilanadi va Excel faylni saqlash tugmasi chiqadi.</p>
+          <div className="row"><button type="button" className="btn sm" id="lastClear" onClick={onForget}>Tozalash</button><span className="hint">eslab qolingan svod o'chiriladi; saqlangan Excel fayllarga tegmaydi</span></div>
         </StatusBox>
         <Tabs tabs={[['svod', 'Svod', null]]} cur="svod" onTab={() => {}}><Paper date={sheet}><SvodTable v={L.svod} /></Paper></Tabs>
       </>
@@ -165,12 +186,12 @@ function Idle({ s, allCats }: { s: State; allCats: string[] }) {
 }
 
 /* ---------------------------------------------------------------- asosiy */
-export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules }: OutputProps) {
+export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForgetLast }: OutputProps) {
   if (s.crash) return <StatusBox kind="bad" title="Dvigatel to'xtadi"><Dlg icon="error"><div className="msg bad"><p>{s.crash}</p></div><p className="hint">Sahifani yangilang (F5) va faylni qayta tashlang.</p></Dlg></StatusBox>;
   if (s.exp.status === 'error' && s.exp.error)
     return <StatusBox kind="bad" title="Fayl o'qilmadi"><Dlg icon="error"><div className="msg bad"><ErrText error={s.exp.error} /></div><p className="hint">Faylni tuzatib yoki boshqasini tanlab, qayta tashlang.</p></Dlg></StatusBox>;
   if (s.exp.status === 'loading') return <StatusBox kind="busy" title="O'qilmoqda…"><p className="hint">Fayl ochilmoqda: {s.exp.name}</p></StatusBox>;
-  if (s.exp.status !== 'ready' || !s.exp.info) return <Idle s={s} allCats={allCats} />;
+  if (s.exp.status !== 'ready' || !s.exp.info) return <Idle s={s} allCats={allCats} onForget={onForgetLast} />;
 
   const info = s.exp.info, n = info.rowCount, a = s.analysis && s.analysis.seq === s.seq ? s.analysis : null;
   const fresh = a ?? s.analysis;                 // yangisi kelguncha oldingisi ko'rsatiladi
@@ -178,7 +199,8 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules }: Outp
   const built = s.build.seq === s.seq ? s.build : null;
   const failed = !!(built && ((built.result && !built.result.verify.ok) || built.status === 'error'));
   const unknown = fresh?.unknown ?? [], dups = fresh?.dups ?? { count: 0, list: [] };
-  const need = info.problemCount > 0 || unknown.length > 0 || dups.count > 0 || !s.newOk || s.editNew;
+  const ask = dateAsk(s), day = listDay(info);
+  const need = info.problemCount > 0 || unknown.length > 0 || dups.count > 0 || !s.newOk || s.editNew || !!ask;
   const [kind, title]: [Kind, ReactNode] = phase === 'busy' ? ['busy', 'Hisoblanmoqda…']
     : phase === 'ok' ? ['ok', 'Tayyor — tekshiruvdan o\'tdi']
     : phase === 'warn' ? ['warn', 'Sizdan javob kerak']
@@ -186,7 +208,7 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules }: Outp
 
   const labels = dateLabels(s.date);
   const updTxt = info.lastUpd === null ? '' : ` Ro'yxatdagi oxirgi yangilanish: ${fmtSerial(info.lastUpd)}.`;
-  const dateOff = info.lastUpd !== null && fmtSerial(info.lastUpd).slice(0, 10) !== labels.dmy;
+  const dateOff = day !== null && day !== s.date;
   const pv = fresh?.preview ?? null;
   const cmpCnt = fresh?.cmp ? fresh.cmp.removed.count + fresh.cmp.added.count + fresh.cmp.changed.count : null;
 
@@ -211,8 +233,9 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules }: Outp
         <ul className="checks">
           <Check kind={dateOff ? 'warn' : 'ok'} title="Fayl o'qildi">
             <span>«{info.sheetName}» varag'i, sarlavha {info.headerRow}-qatorda, {nf(n)} ta murojaat ({info.firstRow}–{info.lastRow}-qatorlar).{updTxt}</span>
-            {dateOff ? <span>Hisobot sanasi {labels.dmy} qilib qo'yilgan — ro'yxat boshqa kunniki bo'lsa, chapdagi sanani to'g'rilang.</span> : null}
+            {dateOff && !ask ? <span>Ro'yxat {dateLabels(day).dmy} kuniniki, hisobot sanasi {labels.dmy} qoldirildi.</span> : null}
           </Check>
+          {ask ? <DateBlock s={s} info={info} day={ask} dispatch={dispatch} /> : null}
           {info.problemCount ? (
             <Check kind="bad" title={`Jadvalda ${nf(info.problemCount)} ta to'ldirilmagan yoki noto'g'ri joy bor`}>
               <div className="need bad">
