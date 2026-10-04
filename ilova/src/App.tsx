@@ -9,7 +9,7 @@ import { Inputs } from './ui/Inputs';
 import { Output } from './ui/Output';
 import { forgetLast, loadLast, loadRules, loadShared, pushLast, pushRules, saveFile, saveLast, saveRules, type RulePair } from './ui/platform';
 import { greet, play, setSound, soundOn, unlock, type SoundName } from './ui/sound';
-import { dateAsk, initState, phaseOf, readyResult, reducer } from './ui/state';
+import { initState, phaseOf, readyResult, reducer } from './ui/state';
 import { Taskbar } from './ui/Taskbar';
 
 export function App() {
@@ -85,7 +85,7 @@ export function App() {
     if (s.exp.status !== 'ready') return;
     client.send({
       t: 'compute', seq: s.seq, expId: s.exp.id, prevId: s.prev.status === 'ready' ? s.prev.id : null,
-      rules: s.rules, newCount: s.newCount, confirmed: s.newOk && !s.editNew && !dateAsk(s), date: s.date,
+      rules: s.rules, newCount: s.newCount, confirmed: s.newOk && !s.editNew, date: s.date,
     });
   }, [s.seq, client]);            // seq barcha kiritishlarni qamraydi (reducer'dagi bump)
 
@@ -137,10 +137,13 @@ export function App() {
     dispatch({ type: 'clearPrev', id });
   }, [client]);
 
-  const onClearExp = useCallback(() => {
-    const id = ++ids.current.exp;
-    client.send({ t: 'clear', which: 'exp', id });
-    dispatch({ type: 'clearExp', id });
+  /* «Tozalash»: ikkala fayl, eslab qolingan svod va sana — sahifa boshidan */
+  const onReset = useCallback(() => {
+    const expId = ++ids.current.exp, prevId = ++ids.current.prev;
+    client.send({ t: 'clear', which: 'exp', id: expId });
+    client.send({ t: 'clear', which: 'prev', id: prevId });
+    dispatch({ type: 'reset', expId, prevId });
+    void forgetLast();
   }, [client]);
 
   const onForgetLast = useCallback(() => {
@@ -189,9 +192,9 @@ export function App() {
           </header>
           <div className="grid">
             <Inputs s={s} allCats={allCats} onFile={onFile} onDate={date => dispatch({ type: 'setDate', date })}
-              onClearPrev={onClearPrev} onClearExp={onClearExp} onRules={onRules} onAddCat={name => dispatch({ type: 'addCat', name })} />
+              onClearPrev={onClearPrev} onRules={onRules} onAddCat={name => dispatch({ type: 'addCat', name })} />
             <div className="col" id="out" aria-live="polite">
-              <Output s={s} dispatch={dispatch} allCats={allCats} onSave={onSave} onDedupe={onDedupe} onRules={onRules} onForgetLast={onForgetLast} />
+              <Output s={s} dispatch={dispatch} allCats={allCats} onSave={onSave} onDedupe={onDedupe} onRules={onRules} onForgetLast={onForgetLast} onReset={onReset} />
             </div>
           </div>
           <footer className="foot">

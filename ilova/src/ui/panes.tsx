@@ -1,6 +1,6 @@
 /* Yorliqlar ichidagi ko'rinishlar: svod (qog'oz varaq), solishtirish, murojaatlar (virtual ro'yxat). */
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { TITLE } from '../engine/core';
+import { HEADERS, TITLE } from '../engine/core';
 import type { Analysis, BriefRow, CmpView, DisplayRow, SvodView } from '../engine/protocol';
 import { nf, MoreList } from './common';
 
@@ -55,16 +55,28 @@ export function GhostSvod({ cats }: { cats: string[] }) {
   );
 }
 
-/** Svod — Excel varag'idagidek: oq varaq, pastida tayyor fayldagi varaqlar yorliqlari («Лист2» — svodning o'zi) */
-export function Paper({ date, children, note }: { date: string; children: ReactNode; note?: ReactNode }) {
+type Sheet = 'main' | 'svod' | 'src';
+const SHEETS: Array<[Sheet, string]> = [['main', 'жараён'], ['svod', 'Лист2'], ['src', 'жараён (2)']];
+
+/** Svod — Excel varag'idagidek: oq varaq, pastida tayyor fayldagi varaqlar yorliqlari («Лист2» — svodning o'zi).
+    Qatorlar bo'lsa (sheets), «жараён» va «жараён (2)» yorliqlari bosilganda o'sha varaq ko'rinadi. */
+export function Paper({ date, children, note, sheets }: { date: string; children: ReactNode; note?: ReactNode; sheets?: Record<'main' | 'src', ReactNode> }) {
+  const [cur, setCur] = useState<Sheet>('svod');
+  const on = sheets ? cur : 'svod';
   return (
     <div className="paperwrap">
       <div className="paper">
-        <p className="rep-title">{TITLE}</p>
-        <div className="rep-meta"><span className="legend">Общий итог: kam <i /> ko'p</span><span className="rep-date">{date}</span></div>
-        {children}
-        {note}
-        <div className="sheets" aria-label="Tayyor fayldagi varaqlar"><span>жараён</span><span className="on">Лист2</span><span>жараён (2)</span></div>
+        {on === 'svod' ? <>
+          <p className="rep-title">{TITLE}</p>
+          <div className="rep-meta"><span className="legend">Общий итог: kam <i /> ko'p</span><span className="rep-date">{date}</span></div>
+          {children}
+          {note}
+        </> : sheets![on]}
+        <div className="sheets" role="tablist" aria-label="Tayyor fayldagi varaqlar">
+          {SHEETS.map(([id, name]) => sheets
+            ? <button type="button" role="tab" key={id} className={on === id ? 'on' : undefined} aria-selected={on === id} data-sheet={id} data-snd="tab" onClick={() => setCur(id)}>{name}</button>
+            : <span key={id} className={on === id ? 'on' : undefined} title={id === 'svod' ? undefined : 'Fayl tashlanganda ochiladi'}>{name}</span>)}
+        </div>
       </div>
     </div>
   );
@@ -108,10 +120,11 @@ export function ComparePane({ c, prevName }: { c: CmpView; prevName: string }) {
 /* ---------------------------------------------------------------- murojaatlar: virtual ro'yxat
    20 000 qator bo'lsa ham faqat ko'rinib turgan ~30 qator chiziladi. */
 const ROW_H = 26, VIEW_H = 470, OVERSCAN = 12;
-/* Qator, raqam, fuqaro, tuman, toifa, ijrochi, muddat, yo'naltirilgan, yangilangan (jami ~1180px — tor ekranda gorizontal aylantiriladi) */
-const COL_W = [56, 158, 180, 120, 150, 200, 92, 132, 132];
+/* «жараён»: qator, raqam, fuqaro, tuman, toifa, ijrochi, muddat, yo'naltirilgan, yangilangan (jami ~1180px — tor ekranda gorizontal aylantiriladi)
+   «жараён (2)»: qator, raqam, toifa, ijrochi, № — svod shu varaqdan sanaladi */
+const COL_W = { main: [56, 158, 180, 120, 150, 200, 92, 132, 132], src: [56, 170, 220, 320, 60] };
 
-export const RowsPane = memo(function RowsPane({ rows, newFrom, analysis }: { rows: DisplayRow[]; newFrom: number; analysis: Analysis | null }) {
+export const RowsPane = memo(function RowsPane({ rows, newFrom, analysis, kind = 'main' }: { rows: DisplayRow[]; newFrom: number; analysis: Analysis | null; kind?: 'main' | 'src' }) {
   const box = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
   const [height, setHeight] = useState(VIEW_H);
@@ -127,36 +140,45 @@ export const RowsPane = memo(function RowsPane({ rows, newFrom, analysis }: { ro
   const first = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN);
   const last = Math.min(n, Math.ceil((top + height) / ROW_H) + OVERSCAN);
   const slice = [];
+  const src = kind === 'src', cols = COL_W[kind];
   for (let i = first; i < last; i++) {
     const r = rows[i], nw = i >= newFrom, cat = catOf(i);
-    slice.push(
+    const id = <td className="id" title={r.id}>{r.linkA ? <a href={r.linkA} target="_blank" rel="noopener noreferrer">{r.id}</a> : r.id}{nw ? <span className="tag">янги</span> : null}</td>;
+    const catTd = <td title={cat ?? ''}>{cat ?? <span className="muted">?</span>}</td>;
+    slice.push(src ? (
+      <tr key={i} className={(i % 2 ? 'odd' : 'even') + (nw ? ' nw' : '')} style={{ height: ROW_H }}>
+        <td className="no mono">{3 + i}</td>{id}{catTd}<td title={r.org}>{r.org}</td><td className="dt n">1</td>
+      </tr>
+    ) : (
       <tr key={i} className={(i % 2 ? 'odd' : 'even') + (nw ? ' nw' : '')} style={{ height: ROW_H }}>
         <td className="no mono">{4 + i}</td>
-        <td className="id" title={r.id}>{r.linkA ? <a href={r.linkA} target="_blank" rel="noopener noreferrer">{r.id}</a> : r.id}{nw ? <span className="tag">янги</span> : null}</td>
+        {id}
         <td title={r.person}>{r.person}</td>
         <td title={r.district}>{r.district}</td>
-        <td title={cat ?? ''}>{cat ?? <span className="muted">?</span>}</td>
+        {catTd}
         <td title={r.org}>{r.org}</td>
         <td className="dt">{r.deadline}</td>
         <td className="dt">{r.sent}</td>
         <td className="dt n">{r.upd}</td>
-      </tr>,
-    );
+      </tr>
+    ));
   }
   return (
     <div className="scroll tall" ref={box} onScroll={onScroll} style={{ height: Math.min(VIEW_H, ROW_H * (n + 1) + 40) }}>
       <table className="rows virt">
         <colgroup>
-          {COL_W.map((w, i) => <col key={i} style={{ width: w }} />)}
+          {cols.map((w, i) => <col key={i} style={{ width: w }} />)}
         </colgroup>
-        <thead><tr>
+        <thead>{src ? <tr>
+          <th scope="col">Qator</th><th scope="col">{HEADERS[0]}</th><th scope="col">{HEADERS[6]}</th><th scope="col">{HEADERS[8]}</th><th scope="col">{HEADERS[13]}</th>
+        </tr> : <tr>
           <th scope="col">Qator</th><th scope="col">Мурожаат рақами</th><th scope="col">Фуқаро</th><th scope="col">Туман/шаҳар</th>
           <th scope="col">Тоифа</th><th scope="col">Ижрочи ташкилот</th><th scope="col">Муддат</th><th scope="col">Йўналтирилган</th><th scope="col">Янгиланган</th>
-        </tr></thead>
+        </tr>}</thead>
         <tbody>
-          {first > 0 ? <tr className="pad" aria-hidden="true"><td colSpan={9} style={{ height: first * ROW_H }} /></tr> : null}
+          {first > 0 ? <tr className="pad" aria-hidden="true"><td colSpan={cols.length} style={{ height: first * ROW_H }} /></tr> : null}
           {slice}
-          {last < n ? <tr className="pad" aria-hidden="true"><td colSpan={9} style={{ height: (n - last) * ROW_H }} /></tr> : null}
+          {last < n ? <tr className="pad" aria-hidden="true"><td colSpan={cols.length} style={{ height: (n - last) * ROW_H }} /></tr> : null}
         </tbody>
       </table>
     </div>

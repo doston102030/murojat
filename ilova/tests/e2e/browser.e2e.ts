@@ -129,6 +129,24 @@ describe('brauzerda: jarayon-svodi.html', () => {
     expect(r).toEqual({ rows: 3, nw: 1 });
   });
 
+  it('svod varag\'idagi yorliqlar: «жараён», «жараён (2)», «Лист2» bosilganda o\'sha varaq ochiladi', async () => {
+    const r = await page.run(async () => {
+      (t().$('[data-tab="svod"]') as HTMLButtonElement).click();
+      await t().wait("t.$('.paper [data-sheet=\"main\"]')", 'varaq yorliqlari');
+      const q = (s: string) => document.querySelector('.paper ' + s);
+      (q('[data-sheet="main"]') as HTMLButtonElement).click();
+      await t().wait("document.querySelector('.paper table.rows')", '«жараён» varag\'i');
+      const main = { rows: document.querySelectorAll('.paper table.rows tbody tr:not(.pad)').length, nw: document.querySelectorAll('.paper table.rows tbody tr.nw').length, svod: !!q('table.svod') };
+      (q('[data-sheet="src"]') as HTMLButtonElement).click();
+      await t().wait("document.querySelector('.paper table.rows thead th:nth-child(3)')?.textContent === 'Мурожаат таснифи'", '«жараён (2)» varag\'i');
+      const src = { first: (q('table.rows tbody tr:not(.pad) td.no') as HTMLElement).textContent, cols: document.querySelectorAll('.paper table.rows thead th').length };
+      (q('[data-sheet="svod"]') as HTMLButtonElement).click();
+      await t().wait("document.querySelector('.paper table.svod')", '«Лист2» varag\'i');
+      return { main, src, on: (q('.sheets .on') as HTMLElement).textContent };
+    });
+    expect(r).toEqual({ main: { rows: 3, nw: 1, svod: false }, src: { first: '3', cols: 5 }, on: 'Лист2' });
+  });
+
   it('oldingi hisobot bilan solishtirish', async () => {
     const prev = records.map(r => r.slice());
     prev[0][2] = 'Previous name';
@@ -140,26 +158,38 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await shot('4-solishtirish');
   });
 
-  it('sana o\'zgarsa eski fayl darhol bloklanadi; ro\'yxat boshqa kunniki — so\'raladi, keyin yangi sana bilan yig\'iladi', async () => {
+  it('sana o\'zgarsa eski fayl darhol bloklanadi; kechagi ro\'yxat bugungi sana bilan — yangi kelgan 0, so\'ralmaydi', async () => {
     const blockedAtOnce = await page.run(() => { t().set('#sana', '2026-10-04'); return !t().ready(); });
     expect(blockedAtOnce).toBe(true);
-    await page.run(() => t().wait("t.$('#dateAsk') && t.text().includes('Sizdan javob kerak')", 'sana savoli'));
-    const text = await page.run(() => t().text());
-    expect(text).toContain('Ro\'yxat 03.10.2026 kuniniki, hisobot sanasi esa 04.10.2026');
-    expect(text).toContain('03.10.2026 gacha kelgan 1 ta murojaat «4-окт ЯНГИ КЕЛГАН» bo\'lib yoziladi');
-    expect(await page.run(() => t().ready())).toBe(false);
-    await shot('4b-sana-savoli');
-    await page.run(() => (t().$('[data-act="keepDate"]') as HTMLButtonElement).click());
     await page.run(() => t().wait("t.ready() && t.text().includes('04.10.2026й.xlsx')", 'yangi sana bilan fayl'));
+    const text = await page.run(() => t().text());
+    expect(text).toContain('Yangi kelganlar: 0 ta — 04.10.2026 kuni kelgan murojaat yo\'q');
+    expect(text).not.toContain('Pastdagi');                     // pastda ikkinchi ro'yxat yo'q — bu jumla chiqmaydi
+    await shot('4b-kechagi-royxat');
+  });
+
+  it('kechagi ro\'yxatda ham sonni qo\'lda o\'zgartirish mumkin', async () => {
+    await page.run(() => (t().$('[data-act="editNew"]') as HTMLButtonElement).click());
+    await page.run(() => t().wait("t.$('#yangiSon') && t.text().includes('Jadval oxiridan nechta qator «4-окт ЯНГИ КЕЛГАН» bo\\'lib yozilsin?')", 'sonni so\'rash'));
+    expect(await page.run(() => t().ready())).toBe(false);
+    await page.run(() => { t().set('#yangiSon', '2'); (t().$('[data-act="confirmNew"]') as HTMLButtonElement).click(); });
+    await page.run(() => t().wait("t.ready() && t.text().includes('Yangi kelganlar: 2 ta') && t.text().includes('Son siz qo\\'ygan')", 'qo\'lda qo\'yilgan son'));
+  });
+
+  it('sanani ro\'yxat kuni qilish: tasdiqlangan son qaytadi', async () => {
+    await page.run(() => (t().$('[data-act="useListDay"]') as HTMLButtonElement).click());
+    await page.run(() => t().wait("t.ready() && t.text().includes('03.10.2026й.xlsx')", 'ro\'yxat kuni bilan fayl'));
+    expect(await page.run(() => (t().$('#sana') as HTMLInputElement).value)).toBe('2026-10-03');
+    expect(await page.run(() => t().text())).toContain('Yangi kelganlar: 1 ta');
   });
 
   it('saqlash: haqiqiy .xlsx yuklab olinadi va qayta o\'qilganda to\'g\'ri', async () => {
     await page.run(() => (t().$('#saveBtn') as HTMLButtonElement).click());
-    const name = 'Жараёндаги мурожаатлар 04.10.2026й.xlsx', file = join(DOWNLOADS, name);
+    const name = 'Жараёндаги мурожаатлар 03.10.2026й.xlsx', file = join(DOWNLOADS, name);
     for (let i = 0; i < 200 && !(existsSync(file) && !readdirSync(DOWNLOADS).some(f => f.endsWith('.crdownload'))); i++) await sleep(50);
     expect(existsSync(file)).toBe(true);
     const back = await readTable(readFileSync(file), 'yuklangan');
-    expect(back.reportDate).toBe('2026-10-04');
+    expect(back.reportDate).toBe('2026-10-03');
     expect(back.rows.map(r => r.id)).toEqual(['SMOKE-001', 'SMOKE-002', 'SMOKE-003']);
     expect(back.rows.map(r => r.red)).toEqual([false, false, true]);
     expect(back.sheetNames).toEqual(['жараён', 'Лист2', 'жараён (2)']);
@@ -173,9 +203,7 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await page.run((d: string) => t().file('#fileExp', d, 'recovery.xlsx'), b64(await portalFile(records, { inline: true })));
     await page.run(() => t().wait("t.$('#yangiSon')", 'qayta so\'rov'));
     await page.run(() => { t().set('#yangiSon', '0'); (t().$('[data-act="confirmNew"]') as HTMLButtonElement).click(); });
-    await page.run(() => t().wait("t.$('#dateAsk')", 'yangi fayl — sana yana so\'raladi'));
-    await page.run(() => (t().$('[data-act="useListDay"]') as HTMLButtonElement).click());
-    await page.run(() => t().wait("t.ready() && t.text().includes('03.10.2026й.xlsx')", 'tiklangan fayl, ro\'yxat kuni bilan'));
+    await page.run(() => t().wait("t.ready() && t.text().includes('03.10.2026й.xlsx')", 'tiklangan fayl'));
     await page.run(() => (t().$('#prevClear') as HTMLButtonElement).click());
     await page.run(() => t().wait("t.ready() && !t.$('#prevClear')", 'solishtirish olib tashlandi'));
   });
@@ -191,15 +219,31 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await page.run(() => t().wait("!t.$('#un-0') && t.$('#yangiSon')", 'qoida qabul qilindi'));
     await open();                                                           // sahifani qayta ochish
     expect(await page.run(() => t().text())).toContain('Oxirgi svod');   // oxirgi tayyor svod bosh sahifada
-    await page.run((d: string) => t().file('#fileExp', d, 'yangi-tasnif.xlsx'), data);
+    await page.run((d: string) => { t().set('#sana', '2026-10-03'); t().file('#fileExp', d, 'yangi-tasnif.xlsx'); }, data);
     await page.run(() => t().wait("t.$('#yangiSon')", 'qayta ochilgandan keyin'));
     expect(await page.run(() => !!t().$('#un-0'))).toBe(false);
   });
 
-  it('tozalash: fayl olib tashlanadi, eslab qolingan svod o\'chiriladi va qayta ochilganda ham chiqmaydi', async () => {
-    await page.run(() => (t().$('#expClear') as HTMLButtonElement).click());
-    await page.run(() => t().wait("t.text().includes('Oxirgi svod') && !t.$('#expClear')", 'fayl olib tashlandi'));
-    await shot('5b-tozalash');
+  it('tozalash: fayllar, eslab qolingan svod va sana — boshidan; qayta ochilganda ham svod chiqmaydi', async () => {
+    await page.run((d: string) => t().file('#filePrev', d, 'oldingi.xlsx'), b64(await portalFile(records, { inline: true })));
+    await page.run(() => t().wait("t.$('#prevClear') && t.$('#clearAll')", 'ikkala fayl'));
+    await shot('5b-tozalash-oldin');
+    await page.run(() => (t().$('#clearAll') as HTMLButtonElement).click());
+    await page.run(() => t().wait("t.text().includes('Fayl kutilmoqda') && !t.$('#prevClear') && !t.$('#clearAll')", 'hammasi tozalandi'));
+    const r = await page.run(() => ({ exp: (t().$('#dropExp') as HTMLElement).innerText, sana: (t().$('#sana') as HTMLInputElement).value }));
+    expect(r.exp).toContain('Excel faylni shu yerga tashlang');
+    expect(r.sana).toBe(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tashkent' }).format(new Date()));
+    await open();
+    expect(await page.run(() => t().text())).toContain('Fayl kutilmoqda');
+  });
+
+  it('bosh sahifadagi «Oxirgi svod»ni o\'chirish', async () => {
+    await page.run((d: string) => { t().set('#sana', '2026-10-03'); t().file('#fileExp', d, 'svod.xlsx'); }, b64(await portalFile(records, { inline: true })));
+    await page.run(() => t().wait("t.$('#yangiSon')", 'savol'));
+    await page.run(() => { t().set('#yangiSon', '1'); (t().$('[data-act="confirmNew"]') as HTMLButtonElement).click(); });
+    await page.run(() => t().wait('t.ready()', 'tayyor'));
+    await open();
+    await page.run(() => t().wait("t.$('#lastClear')", 'oxirgi svod'));
     await page.run(() => (t().$('#lastClear') as HTMLButtonElement).click());
     await page.run(() => t().wait("t.text().includes('Fayl kutilmoqda') && !t.$('#lastClear')", 'svod o\'chirildi'));
     await open();
@@ -219,10 +263,8 @@ describe('brauzerda: jarayon-svodi.html', () => {
       await t().wait('t.ready()', 'katta fayl tayyor', 90000);
       const ready = performance.now() - t0;
       const t1 = performance.now();
-      t().set('#sana', '2026-10-05');
-      await t().wait("t.$('[data-act=\"keepDate\"]')", 'sana savoli', 90000);
-      (t().$('[data-act="keepDate"]') as HTMLButtonElement).click();
-      await t().wait("t.ready() && t.text().includes('05.10.2026й.xlsx')", 'sana o\'zgargach', 90000);
+      t().set('#sana', '2026-10-01');
+      await t().wait("t.ready() && t.text().includes('01.10.2026й.xlsx')", 'sana o\'zgargach', 90000);
       const redo = performance.now() - t1;
       await new Promise(res => setTimeout(res, 100));
       obs.disconnect();

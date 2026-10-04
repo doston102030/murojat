@@ -5,7 +5,7 @@ import type { ExpInfo } from '../engine/protocol';
 import { Check, Dlg, ErrText, MoreList, Spinner, StatusBox, Win, nf, type Kind } from './common';
 import { Icon, type IconName } from './icons';
 import { ComparePane, GhostSvod, Paper, RowsPane, SvodTable } from './panes';
-import { dateAsk, isBusy, listDay, phaseOf, readyResult, type Action, type State, type Tab } from './state';
+import { isBusy, listDay, phaseOf, readyResult, staleDay, type Action, type State, type Tab } from './state';
 
 export interface OutputProps {
   s: State;
@@ -15,6 +15,7 @@ export interface OutputProps {
   onDedupe(): void;
   onRules(pairs: Array<[string, string]>): void;
   onForgetLast(): void;
+  onReset(): void;
 }
 
 const NEWCAT = '__yangi__';
@@ -25,10 +26,10 @@ const TAB_WIN: Record<Tab, [IconName, string]> = {
   rows: ['xls', 'Murojaatlar — «жараён» varag\'i'],
 };
 
-function Tabs({ tabs, cur, onTab, children }: { tabs: Array<[Tab, string, number | null]>; cur: Tab; onTab(t: Tab): void; children: ReactNode }) {
+function Tabs({ tabs, cur, onTab, tag, children }: { tabs: Array<[Tab, string, number | null]>; cur: Tab; onTab(t: Tab): void; tag?: ReactNode; children: ReactNode }) {
   const active = tabs.some(t => t[0] === cur) ? cur : tabs[0][0];
   return (
-    <Win icon={TAB_WIN[active][0]} title={TAB_WIN[active][1]} className="tabbox">
+    <Win icon={TAB_WIN[active][0]} title={TAB_WIN[active][1]} tag={tag} className="tabbox">
       <div className="tabs" role="tablist">
         {tabs.map(([id, name, cnt]) => (
           <button type="button" role="tab" key={id} id={`tab-${id}`} className={'tab' + (active === id ? ' on' : '')} aria-selected={active === id}
@@ -52,6 +53,18 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
 
   const first = k > 0 ? info.rows[n - k] : null;
   const range = first ? <>{4 + n - k}–{3 + n}-qatorlar (tayyor faylda), birinchisi {first.id}{first.person ? ' — ' + first.person : ''}</> : <>yangi kelgan yo'q</>;
+  const stale = staleDay(s), want = dateLabels(s.date), got = stale ? dateLabels(stale) : null;
+  if (stale && got && !s.editNew) {
+    return (
+      <Check kind="ok" title={k ? `Yangi kelganlar: ${nf(k)} ta` : `Yangi kelganlar: 0 ta — ${want.dmy} kuni kelgan murojaat yo'q`}>
+        <span id="staleNew">Ro'yxat {got.dmy} kuniniki (oxirgi yangilanish {fmtSerial(info.lastUpd)}).
+          {k ? <> {range}. Son siz qo'ygan bo'yicha olindi.</>
+            : d.count ? ` Pastdagi ${nf(d.count)} ta murojaat ${got.dmy} gacha kelgan: ular «${want.newCol}» qilinmaydi, oddiy qator bo'lib qoladi.` : null}</span>
+        <span>{got.dmy} hisoboti kerak bo'lsa — <button type="button" className="btn link" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: stale })}>sanani {got.dmy} qilish</button>.
+          {' '}<button type="button" className="btn link" data-act="editNew" onClick={() => dispatch({ type: 'editNew' })}>O'zgartirish</button></span>
+      </Check>
+    );
+  }
   if (s.newOk && !s.editNew) {
     const why = d.kind === 'restart' && k === d.count
       ? `«Ижрога йўналтирилган сана» tartibi manbadagi ${d.boundaryRow}-qatordan qayta boshlanadi` + (d.tableEnd ? ', birinchi jadval ham shu yerda tugagan.' : '.')
@@ -63,7 +76,8 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
       </Check>
     );
   }
-  const why = s.editNew && s.newOk ? 'Jadval oxiridan nechta qator yangi kelganlar ro\'yxatiga tegishli?'
+  const why = got ? `Ro'yxat ${got.dmy} kuniniki. Jadval oxiridan nechta qator «${want.newCol}» bo'lib yozilsin?`
+    : s.editNew && s.newOk ? 'Jadval oxiridan nechta qator yangi kelganlar ro\'yxatiga tegishli?'
     : d.kind === 'none' ? 'Ikkinchi ro\'yxat belgisi topilmadi: sanalar boshidan oxirigacha o\'sib boradi. Pastga yangi kelganlar qo\'shilgan bo\'lsa, nechta ekanini yozing; qo\'shilmagan bo\'lsa, 0 qoldiring.'
     : d.kind === 'ends' ? 'Jadval ichida birinchi ro\'yxat tugagan joy bor, lekin sanalar tartibi uzilmagan. Undan pastdagi qatorlar yangi kelganlarmi yoki shu ro\'yxatning davomimi?'
     : d.kind === 'many' ? 'Sanalar tartibi bir necha joyda qayta boshlanadi. Yangi kelganlar qaysi qatordan boshlanishini tanlang.'
@@ -85,25 +99,6 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
           <button type="button" className="btn" data-act="confirmNew" onClick={confirm}>Tasdiqlash</button>
         </div>
         <span>Hozirgi tanlov: {range}.</span>
-      </div>
-    </Check>
-  );
-}
-
-/* ---------------------------------------------------------------- ro'yxat kuni ≠ hisobot sanasi */
-function DateBlock({ s, info, day, dispatch }: { s: State; info: ExpInfo; day: string; dispatch: Dispatch<Action> }) {
-  const want = dateLabels(s.date), got = dateLabels(day), old = day < s.date, k = s.newOk && !s.editNew ? s.newCount : 0;
-  const none = old && !info.rows.some(r => r.sent.startsWith(want.dmy) || r.upd.startsWith(want.dmy));
-  return (
-    <Check kind="warn" title={`Ro'yxat ${got.dmy} kuniniki, hisobot sanasi esa ${want.dmy}`}>
-      <div className="need" id="dateAsk">
-        <span>Ro'yxatdagi eng oxirgi yangilanish: {fmtSerial(info.lastUpd)}.{none ? ` ${want.dmy} kuni kelgan yoki yangilangan birorta murojaat yo'q.` : ''}</span>
-        {k ? <span>Shu holicha saqlansa, {old ? `${got.dmy} gacha kelgan ${nf(k)} ta murojaat` : `${nf(k)} ta yangi kelgan`} «{want.newCol}» bo'lib yoziladi.</span> : null}
-        {old ? <span>{want.dmy} hisoboti kerak bo'lsa, portaldan yangi ro'yxatni yuklab, shu yerga tashlang.</span> : null}
-        <div className="chips">
-          <button type="button" className="btn sm" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: day })}>Sanani {got.dmy} qilish</button>
-          <button type="button" className="btn sm" data-act="keepDate" onClick={() => dispatch({ type: 'keepDate' })}>{want.dmy} qolsin</button>
-        </div>
       </div>
     </Check>
   );
@@ -186,10 +181,10 @@ function Idle({ s, allCats, onForget }: { s: State; allCats: string[]; onForget(
 }
 
 /* ---------------------------------------------------------------- asosiy */
-export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForgetLast }: OutputProps) {
+export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForgetLast, onReset }: OutputProps) {
   if (s.crash) return <StatusBox kind="bad" title="Dvigatel to'xtadi"><Dlg icon="error"><div className="msg bad"><p>{s.crash}</p></div><p className="hint">Sahifani yangilang (F5) va faylni qayta tashlang.</p></Dlg></StatusBox>;
   if (s.exp.status === 'error' && s.exp.error)
-    return <StatusBox kind="bad" title="Fayl o'qilmadi"><Dlg icon="error"><div className="msg bad"><ErrText error={s.exp.error} /></div><p className="hint">Faylni tuzatib yoki boshqasini tanlab, qayta tashlang.</p></Dlg></StatusBox>;
+    return <StatusBox kind="bad" title="Fayl o'qilmadi"><Dlg icon="error"><div className="msg bad"><ErrText error={s.exp.error} /></div><p className="hint">Faylni tuzatib yoki boshqasini tanlab, qayta tashlang.</p><div className="row"><button type="button" className="btn sm" id="clearAll" onClick={onReset}>Tozalash</button></div></Dlg></StatusBox>;
   if (s.exp.status === 'loading') return <StatusBox kind="busy" title="O'qilmoqda…"><p className="hint">Fayl ochilmoqda: {s.exp.name}</p></StatusBox>;
   if (s.exp.status !== 'ready' || !s.exp.info) return <Idle s={s} allCats={allCats} onForget={onForgetLast} />;
 
@@ -199,8 +194,8 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForg
   const built = s.build.seq === s.seq ? s.build : null;
   const failed = !!(built && ((built.result && !built.result.verify.ok) || built.status === 'error'));
   const unknown = fresh?.unknown ?? [], dups = fresh?.dups ?? { count: 0, list: [] };
-  const ask = dateAsk(s), day = listDay(info);
-  const need = info.problemCount > 0 || unknown.length > 0 || dups.count > 0 || !s.newOk || s.editNew || !!ask;
+  const day = listDay(info), newFrom = s.newOk ? n - s.newCount : n;
+  const need = info.problemCount > 0 || unknown.length > 0 || dups.count > 0 || !s.newOk || s.editNew;
   const [kind, title]: [Kind, ReactNode] = phase === 'busy' ? ['busy', 'Hisoblanmoqda…']
     : phase === 'ok' ? ['ok', 'Tayyor — tekshiruvdan o\'tdi']
     : phase === 'warn' ? ['warn', 'Sizdan javob kerak']
@@ -208,7 +203,7 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForg
 
   const labels = dateLabels(s.date);
   const updTxt = info.lastUpd === null ? '' : ` Ro'yxatdagi oxirgi yangilanish: ${fmtSerial(info.lastUpd)}.`;
-  const dateOff = day !== null && day !== s.date;
+  const ahead = day !== null && day > s.date ? day : null;      // ro'yxat hisobot sanasidan keyingi kunniki
   const pv = fresh?.preview ?? null;
   const cmpCnt = fresh?.cmp ? fresh.cmp.removed.count + fresh.cmp.added.count + fresh.cmp.changed.count : null;
 
@@ -231,11 +226,10 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForg
         </div>
 
         <ul className="checks">
-          <Check kind={dateOff ? 'warn' : 'ok'} title="Fayl o'qildi">
+          <Check kind={ahead ? 'warn' : 'ok'} title="Fayl o'qildi">
             <span>«{info.sheetName}» varag'i, sarlavha {info.headerRow}-qatorda, {nf(n)} ta murojaat ({info.firstRow}–{info.lastRow}-qatorlar).{updTxt}</span>
-            {dateOff && !ask ? <span>Ro'yxat {dateLabels(day).dmy} kuniniki, hisobot sanasi {labels.dmy} qoldirildi.</span> : null}
+            {ahead ? <span id="aheadDay">Ro'yxat {dateLabels(ahead).dmy} kuniniki, hisobot sanasi esa undan oldingi kun — {labels.dmy}. <button type="button" className="btn link" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: ahead })}>Sanani {dateLabels(ahead).dmy} qilish</button></span> : null}
           </Check>
-          {ask ? <DateBlock s={s} info={info} day={ask} dispatch={dispatch} /> : null}
           {info.problemCount ? (
             <Check kind="bad" title={`Jadvalda ${nf(info.problemCount)} ta to'ldirilmagan yoki noto'g'ri joy bor`}>
               <div className="need bad">
@@ -262,16 +256,20 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForg
         </ul>
       </StatusBox>
 
-      <Tabs tabs={[['svod', 'Svod', null], ['cmp', 'Solishtirish', cmpCnt], ['rows', 'Murojaatlar', n]]} cur={s.tab} onTab={t => dispatch({ type: 'tab', tab: t })}>
+      <Tabs tabs={[['svod', 'Svod', null], ['cmp', 'Solishtirish', cmpCnt], ['rows', 'Murojaatlar', n]]} cur={s.tab} onTab={t => dispatch({ type: 'tab', tab: t })}
+        tag={<button type="button" className="btn sm clear" id="clearAll" title="Fayllarni olib tashlab, sahifani boshidan boshlash" onClick={onReset}>Tozalash</button>}>
         {s.tab === 'cmp' ? (
           s.prev.status === 'error' && s.prev.error ? <div className="msg bad"><p><b>Oldingi hisobot o'qilmadi.</b></p><ErrText error={s.prev.error} /></div>
             : s.prev.status === 'loading' ? <p className="hint"><Spinner /> Oldingi hisobot o'qilmoqda…</p>
             : fresh?.cmp ? <ComparePane c={fresh.cmp} prevName={s.prev.name} />
             : <div className="empty"><p>Chapdagi «Oldingi hisobot» qutisiga avvalgi tayyor faylni tashlang. Nima chiqib ketgani, nima qo'shilgani va qaysi murojaat o'zgargani shu yerda chiqadi.</p></div>
         ) : s.tab === 'rows' ? (
-          <RowsPane rows={info.rows} newFrom={s.newOk ? n - s.newCount : n} analysis={fresh} />
+          <RowsPane rows={info.rows} newFrom={newFrom} analysis={fresh} />
         ) : pv ? (
-          <Paper date={labels.sheet} note={s.newOk ? null : <p className="hint">«Янги келган» ustuni tasdiqlanmagan son bo'yicha ko'rsatilgan.</p>}><SvodTable v={pv} /></Paper>
+          <Paper date={labels.sheet} note={s.newOk ? null : <p className="hint">«Янги келган» ustuni tasdiqlanmagan son bo'yicha ko'rsatilgan.</p>}
+            sheets={{ main: <RowsPane rows={info.rows} newFrom={newFrom} analysis={fresh} />, src: <RowsPane kind="src" rows={info.rows} newFrom={newFrom} analysis={fresh} /> }}>
+            <SvodTable v={pv} />
+          </Paper>
         ) : (
           <div className="empty"><p>{fresh ? 'Yuqoridagi tasniflarga toifa tanlanganidan keyin svod shu yerda chiqadi.' : 'Svod hisoblanmoqda…'}</p></div>
         )}

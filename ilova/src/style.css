@@ -227,8 +227,14 @@ select { appearance: none; padding-right: 26px; cursor: pointer; background: var
 .legend { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 64px; height: 9px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, .25); background: linear-gradient(90deg, var(--heat-lo), var(--heat-mid), var(--heat-hi)); display: inline-block; }
 .sheets { display: flex; flex-wrap: wrap; margin: 4px -14px 0; padding: 0 0 0 8px; background: linear-gradient(#f1f4f8, #dfe6ee); border-top: 1px solid #b9c6d4; font-size: 12px; }
-.sheets span { padding: 2px 14px 3px; margin-right: -1px; border: 1px solid #b9c6d4; border-top: 0; border-radius: 0 0 4px 4px; color: #4a5a6c; background: linear-gradient(#e9eef4, #d3dce6); }
-.sheets span.on { position: relative; top: -1px; padding-top: 3px; background: #fff; color: #000; font-weight: 600; }
+.sheets > * { font: inherit; padding: 2px 14px 3px; margin-right: -1px; border: 1px solid #b9c6d4; border-top: 0; border-radius: 0 0 4px 4px; color: #4a5a6c; background: linear-gradient(#e9eef4, #d3dce6); }
+.sheets > .on { position: relative; top: -1px; padding-top: 3px; background: #fff; color: #000; font-weight: 600; }
+.sheets button { cursor: pointer; }
+.sheets button:not(.on):hover { color: #000; background: linear-gradient(#f2f9fd, #c6e7fb); }
+.sheets button.on { cursor: default; }
+.sheets button:focus-visible { outline: 1px dotted #000; outline-offset: -3px; }
+.sheets span:not(.on) { opacity: .65; }
+.title .btn.clear { flex: none; margin-right: 4px; }
 
 /* ---- jadvallar */
 .scroll { overflow-x: auto; max-width: 100%; }
