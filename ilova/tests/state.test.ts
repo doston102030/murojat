@@ -6,7 +6,7 @@ import { day } from './fixture';
 
 const info = (lastUpd: number | null, sure = true): ExpInfo => ({
   name: 'Янги.xlsx', sheetName: 'жараён', headerRow: 2, firstRow: 4, lastRow: 125, rowCount: 122,
-  problems: [], problemCount: 0, reportDate: null, lastUpd, rows: [],
+  problems: [], problemCount: 0, reportDate: null, lastUpd, full: null, rows: [],
   det: { count: 29, sure, kind: sure ? 'restart' : 'many', boundaryRow: 97, tableEnd: true, candidates: [{ count: 29, row: 97 }] },
 });
 const loaded = (date: string, lastUpd: number | null, sure = true): State => {

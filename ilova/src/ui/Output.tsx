@@ -57,7 +57,7 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
   if (stale && got && !s.editNew) {
     return (
       <Check kind="ok" title={k ? `Yangi kelganlar: ${nf(k)} ta` : `Yangi kelganlar: 0 ta — ${want.dmy} kuni kelgan murojaat yo'q`}>
-        <span id="staleNew">Ro'yxat {got.dmy} kuniniki (oxirgi yangilanish {fmtSerial(info.lastUpd)}).
+        <span id="staleNew">Ro'yxat {got.dmy} kuniniki ({info.full ? 'hisobot holati' : 'oxirgi yangilanish'} {fmtSerial(info.lastUpd)}).
           {k ? <> {range}. Son siz qo'ygan bo'yicha olindi.</>
             : d.count ? ` Pastdagi ${nf(d.count)} ta murojaat ${got.dmy} gacha kelgan: ular «${want.newCol}» qilinmaydi, oddiy qator bo'lib qoladi.` : null}</span>
         <span>{got.dmy} hisoboti kerak bo'lsa — <button type="button" className="btn link" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: stale })}>sanani {got.dmy} qilish</button>.
@@ -66,8 +66,11 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
     );
   }
   if (s.newOk && !s.editNew) {
+    const day = listDay(info), dmy = day ? dateLabels(day).dmy : '';
     const why = d.kind === 'restart' && k === d.count
       ? `«Ижрога йўналтирилган сана» tartibi manbadagi ${d.boundaryRow}-qatordan qayta boshlanadi` + (d.tableEnd ? ', birinchi jadval ham shu yerda tugagan.' : '.')
+      : d.kind === 'date' && k === d.count
+      ? (k ? `«Ижрога йўналтирилган сана» ${dmy} bo'lganlar — hisobot kuni kelganlar.` : `Hisobot kuni (${dmy}) yo'naltirilgan murojaat yo'q.`)
       : 'Son siz tasdiqlagan bo\'yicha olindi.';
     return (
       <Check kind="ok" title={`Yangi kelganlar: ${nf(k)} ta`}>
@@ -202,7 +205,7 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForg
     : ['bad', failed ? 'Tekshiruvdan o\'tmadi — fayl berilmaydi' : 'Faylni tuzatish kerak'];
 
   const labels = dateLabels(s.date);
-  const updTxt = info.lastUpd === null ? '' : ` Ro'yxatdagi oxirgi yangilanish: ${fmtSerial(info.lastUpd)}.`;
+  const updTxt = info.lastUpd === null ? '' : info.full ? ` Hisobot holati: ${fmtSerial(info.lastUpd)}.` : ` Ro'yxatdagi oxirgi yangilanish: ${fmtSerial(info.lastUpd)}.`;
   const ahead = day !== null && day > s.date ? day : null;      // ro'yxat hisobot sanasidan keyingi kunniki
   const pv = fresh?.preview ?? null;
   const cmpCnt = fresh?.cmp ? fresh.cmp.removed.count + fresh.cmp.added.count + fresh.cmp.changed.count : null;
@@ -227,7 +230,9 @@ export function Output({ s, dispatch, allCats, onSave, onDedupe, onRules, onForg
 
         <ul className="checks">
           <Check kind={ahead ? 'warn' : 'ok'} title="Fayl o'qildi">
-            <span>«{info.sheetName}» varag'i, sarlavha {info.headerRow}-qatorda, {nf(n)} ta murojaat ({info.firstRow}–{info.lastRow}-qatorlar).{updTxt}</span>
+            {info.full
+              ? <span id="fullReport">Portalning to'liq hisoboti («{info.sheetName}» varag'i): {nf(info.full.total)} ta murojaatdan {nf(n)} tasi olindi — «Жараёнда», «Янги» holatidagi va «Юқори ташкилотлардан келиб тушган» yo'nalishidagilar. Ular «Ижрога йўналтирилган сана» bo'yicha tartiblandi.{updTxt}</span>
+              : <span>«{info.sheetName}» varag'i, sarlavha {info.headerRow}-qatorda, {nf(n)} ta murojaat ({info.firstRow}–{info.lastRow}-qatorlar).{updTxt}</span>}
             {ahead ? <span id="aheadDay">Ro'yxat {dateLabels(ahead).dmy} kuniniki, hisobot sanasi esa undan oldingi kun — {labels.dmy}. <button type="button" className="btn link" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: ahead })}>Sanani {dateLabels(ahead).dmy} qilish</button></span> : null}
           </Check>
           {info.problemCount ? (

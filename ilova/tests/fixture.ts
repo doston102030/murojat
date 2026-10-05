@@ -72,3 +72,34 @@ export function portalRows(n: number, nNew: number, orgCount = 6): Val[][] {
   }
   return out;
 }
+
+/* Portalning to'liq hisoboti: sarlavha 3-qatorda, ustunlar boshqa tartibda, hamma holatdagi murojaatlar */
+export const FULL_HEADERS = ['Т.р.', 'Мурожаат йўналиши', 'Мурожаат рақами', 'Мурожаат тури', 'Ижрога йўналтирилган сана',
+  'Масаланинг умумий муддати', 'Масала жорий ҳолати', 'Масъул ташкилот', 'Ижрочи ташкилот', 'Кўриб чиқаётган ташкилот',
+  'Яшаш ҳудуди', 'Яшаш туман (шаҳар)', 'Фамилияси', 'Исми', 'Отасининг исми', 'Масала рақами', 'Масала', 'Натижа ҳолати'];
+export interface FullRow { id: string; status: string; dir?: string; sent: Val; deadline?: Val; tasnif?: string; org?: string; type?: string; task?: Val }
+
+export async function fullReportFile(list: FullRow[], title = '( 01.01.2026 00:00:00 - 05.10.2026 16:00:00 ) сана ҳолатига кўра'): Promise<Uint8Array> {
+  const zip = new JSZip();
+  const cell = (c: number, r: number, v: Val) => {
+    const ref = colName(c + 1) + r;
+    if (v == null) return '';
+    if (typeof v === 'number') return `<c r="${ref}"><v>${v}</v></c>`;
+    return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+  };
+  const rowXml = (r: number, vals: Val[]) => `<row r="${r}">${vals.map((v, c) => cell(c, r, v)).join('')}</row>`;
+  const xml = [rowXml(1, [title]), rowXml(2, ['Танланган ташкилотнинг масалалари рўйхати']), rowXml(3, FULL_HEADERS)];
+  list.forEach((x, i) => {
+    const org = x.org ?? 'Ташкилот 1';
+    xml.push(rowXml(4 + i, [i + 1, x.dir ?? 'Юқори ташкилотлардан келиб тушган', x.id, x.type ?? 'Ариза', x.sent, x.deadline ?? null, x.status,
+      '"Ҳудудгазтаъминот" АЖ', org, org, 'Андижон вилояти', 'Асака тумани', 'Фамилия' + i, 'Исм' + i, 'Отаси', x.task ?? 1,
+      x.tasnif ?? BASE_RULES[i % BASE_RULES.length][0], null]));
+  });
+  zip.file('[Content_Types].xml', '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/></Types>');
+  zip.file('_rels/.rels', `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  zip.file('xl/workbook.xml', `<workbook xmlns="${NS}" xmlns:r="${REL}"><sheets><sheet name="0-50000" sheetId="1" r:id="rId1"/></sheets></workbook>`);
+  zip.file('xl/_rels/workbook.xml.rels', `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId9" Type="${REL}/styles" Target="styles.xml"/></Relationships>`);
+  zip.file('xl/worksheets/sheet1.xml', `<worksheet xmlns="${NS}" xmlns:r="${REL}"><sheetData>${xml.join('')}</sheetData></worksheet>`);
+  zip.file('xl/styles.xml', STYLES);
+  return zip.generateAsync({ type: 'uint8array' });
+}

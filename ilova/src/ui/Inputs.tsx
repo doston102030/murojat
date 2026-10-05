@@ -50,7 +50,8 @@ export function Inputs({ s, allCats, onFile, onDate, onClearPrev, onRules, onAdd
             : exp.status === 'error' ? <><strong>{exp.name}</strong><small>o'qilmadi — boshqa fayl tanlang</small></>
             : <Idle a="Excel faylni shu yerga tashlang" b="yoki tugmani bosib tanlang (.xlsx)" />}
         </FileDrop>
-        <p className="hint">«жараён» varag'i: sarlavha qatori, ostida portaldagi ro'yxat. Yangi kelganlar ro'yxati eng pastda turadi.</p>
+        <p className="hint">«жараён» varag'i: sarlavha qatori, ostida portaldagi ro'yxat. Yangi kelganlar ro'yxati eng pastda turadi.
+          Portalning to'liq hisobotini («Масала жорий ҳолати» ustuni bilan) ham tashlash mumkin — jarayondagilari o'zi ajratiladi.</p>
       </Win>
 
       <Win icon="cal" title="2. Hisobot sanasi" min>

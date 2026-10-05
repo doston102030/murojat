@@ -4,8 +4,8 @@ import JSZip from 'jszip';
 import STATIC from './static.json';
 import { parse, sax, findAll, findFirst, nsAttr, XmlError, type XEl, type Attrs } from './xml';
 import {
-  EngineError, HEADERS, COLS, TITLE, L_COUNT, L_COLS, L_ROWS, L_TOTAL, SHEET_MAIN, SHEET_SVOD, SHEET_SRC, XLSX_MIME,
-  NUM_RE, emptyCell, norm, escT, escA, colName, colIndex, textToSerial, dateLabels, svod,
+  EngineError, HEADERS, COLS, TITLE, L_COUNT, L_COLS, L_ROWS, L_TOTAL, SHEET_MAIN, SHEET_SVOD, SHEET_SRC, XLSX_MIME, FULL, FULL_DIR, IN_PROCESS,
+  NUM_RE, emptyCell, norm, escT, escA, colName, colIndex, textToSerial, fmtSerial, dateLabels, svod,
   type Cell, type Row, type Table, type Svod, type DateLabels,
 } from './core';
 
@@ -210,14 +210,17 @@ export async function loadSheet(wb: Workbook, sheet: SheetRef, opts: { maxRows?:
 export async function readTable(data: ArrayBuffer | Uint8Array, label: string): Promise<Table> {
   const wb = await readWorkbook(data, label);
   const order = wb.sheets.slice().sort((a, b) => Number(b.name === SHEET_MAIN) - Number(a.name === SHEET_MAIN));
-  let sheet: Sheet | null = null, hi = -1;
+  let sheet: Sheet | null = null, hi = -1, full = false;
   for (const sh of order) {
     const cand = await loadSheet(wb, sh);
     const i = cand.rows.findIndex((row, k) => k < 60 && row.cells[1] && norm(row.cells[1].text) === HEADERS[0]);
     if (i >= 0) { sheet = cand; hi = i; break; }
+    const j = cand.rows.findIndex((row, k) => k < 60 && hasHeader(row, FULL.id) && hasHeader(row, FULL.status));
+    if (j >= 0) { sheet = cand; hi = j; full = true; break; }
   }
-  if (!sheet) throw new EngineError(`${label}: A ustunida «${HEADERS[0]}» sarlavhasi bor jadval topilmadi.`,
+  if (!sheet) throw new EngineError(`${label}: «${HEADERS[0]}» sarlavhasi bor jadval topilmadi.`,
     ['Varaqlar: ' + (wb.sheets.map(s => '«' + s.name + '»').join(', ') || 'yo\'q')]);
+  if (full) return readFull(wb, sheet, hi, label);
 
   const hrow = sheet.rows[hi], bad: string[] = [];
   HEADERS.forEach((h, j) => {
@@ -278,7 +281,80 @@ export async function readTable(data: ArrayBuffer | Uint8Array, label: string): 
     } catch { /* svod varag'i o'qilmasa ham jadval yetarli */ }
   }
   return { label, sheetName: sheet.name, headerRow: hrow.r, firstRow: rows[0].r, lastRow: rows[rows.length - 1].r,
-    rows, problems, printer, reportDate, sheetNames: wb.sheets.map(s => s.name) };
+    rows, problems, printer, reportDate, sheetNames: wb.sheets.map(s => s.name), full: null };
+}
+
+const hasHeader = (row: SheetRow, h: string) => Object.values(row.cells).some(c => norm(c.text) === h);
+
+/** Portalning to'liq hisoboti: istalgan tartibdagi ustunlar, hamma holatdagi murojaatlar.
+    Jarayondagi (IN_PROCESS) va yuqoridan kelganlari (FULL_DIR) olinadi va portal ro'yxati ko'rinishiga (A..N) keltiriladi;
+    «Ижрога йўналтирилган сана» bo'yicha tartiblanadi — hisobot kuni kelganlar eng pastda. */
+async function readFull(wb: Workbook, sheet: Sheet, hi: number, label: string): Promise<Table> {
+  const hrow = sheet.rows[hi], keys = Object.keys(FULL) as Array<keyof typeof FULL>;
+  const at: Partial<Record<keyof typeof FULL, number>> = {};
+  for (const c in hrow.cells) {
+    const t = norm(hrow.cells[c].text);
+    for (const k of keys) if (FULL[k] === t && at[k] === undefined) at[k] = +c;
+  }
+  const missing = keys.filter(k => at[k] === undefined);
+  if (missing.length) throw new EngineError(`${label}: portal hisobotida kerakli ustunlar yo'q (${hrow.r}-qator sarlavhasi).`,
+    missing.map(k => `«${FULL[k]}» ustuni topilmadi`));
+  const col = at as Record<keyof typeof FULL, number>;
+
+  const str = (t: string): Cell => (t ? { s: 0, kind: 'str', text: t, raw: null, num: null, f: null } : emptyCell());
+  const asDate = (c: Cell): Cell | null => {
+    if (c.kind === 'num' && NUM_RE.test(c.raw as string)) return { s: 0, kind: 'num', text: c.raw as string, raw: c.raw, num: c.num, f: null };
+    const ser = c.kind === 'str' ? textToSerial(c.text) : null;
+    return ser === null ? null : { s: 0, kind: 'num', text: String(ser), raw: String(ser), num: ser, f: null, wasText: true };
+  };
+  const day = (ser: number) => fmtSerial(ser).slice(0, 10);
+
+  const rows: Row[] = [], problems: string[] = [];
+  let total = 0;
+  for (let k = hi + 1; k < sheet.rows.length; k++) {
+    const row = sheet.rows[k], get = (key: keyof typeof FULL) => row.cells[col[key]] || emptyCell();
+    if (Object.values(row.cells).every(c => c.kind === 'empty')) continue;
+    total++;
+    if (!IN_PROCESS.includes(norm(get('status').text)) || norm(get('dir').text) !== FULL_DIR) continue;
+
+    const sentSrc = get('sent'), sent = asDate(sentSrc), dl = asDate(get('deadline'));
+    const m = sent ? sent.num as number : null;
+    const term = !dl ? get('deadline').text : m === null ? day(dl.num as number)
+      : `${Math.round(Math.floor(dl.num as number) - Math.floor(m))} кун (${day(dl.num as number)})`;
+    const task = [norm(get('task').text), norm(get('type').text)].filter(Boolean).join('-');      // «1-Ариза», portal ro'yxatidagidek
+    const v: Cell[] = [
+      str(get('id').text), str(task), str(get('last').text), str(get('first').text), str(get('region').text), str(get('district').text),
+      str(get('tasnif').text), emptyCell(), str(get('exec').text), str(get('resp').text), str(get('cur').text),
+      str(term), sent ?? str(sentSrc.text), emptyCell(),
+    ];
+    const rec: Row = {
+      r: row.r, ht: null, v, id: norm(v[0].text), task: norm(v[1].text), org: v[8].text, tasnif: v[6].text,
+      linkA: sheet.links[colName(col.id) + row.r] || null, linkB: null, tableEnd: false, red: false, cat: null, m,
+    };
+    if (!rec.id) problems.push(`${row.r}-qator: «${FULL.id}» bo'sh`);
+    if (!norm(rec.tasnif)) problems.push(`${row.r}-qator: «${FULL.tasnif}» (murojaat tasnifi) bo'sh`);
+    if (!norm(rec.org)) problems.push(`${row.r}-qator: «${FULL.exec}» bo'sh`);
+    if (sentSrc.kind === 'empty') problems.push(`${row.r}-qator: «${FULL.sent}» bo'sh`);
+    else if (!sent) problems.push(`${row.r}-qator: «${FULL.sent}» sanaga o'xshamaydi («${sentSrc.text}»)`);
+    rows.push(rec);
+  }
+  if (!rows.length) throw new EngineError(`${label}: hisobotda jarayondagi murojaat yo'q.`,
+    [`Hisobotdagi ${total} ta murojaatning birortasi ham «${IN_PROCESS.join('», «')}» holatida va «${FULL_DIR}» yo'nalishida emas.`]);
+  rows.sort((a, b) => (a.m ?? 0) - (b.m ?? 0));
+
+  // hisobot qaysi paytgacha: sarlavhadagi «( 01.01.2026 00:00:00 - 05.10.2026 16:00:00 )»; topilmasa — eng oxirgi yo'naltirilgan sana
+  let asOf: number | null = null;
+  for (const row of sheet.rows.slice(0, hi)) for (const c of Object.values(row.cells)) {
+    const mm = /-\s*(\d{1,2}\.\d{1,2}\.\d{4}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?)\s*\)/.exec(c.text);
+    if (mm && asOf === null) asOf = textToSerial(mm[1]);
+  }
+  if (asOf === null) for (const r of rows) if (r.m !== null && (asOf === null || r.m > asOf)) asOf = r.m;
+
+  let printer: Uint8Array | null = null;
+  if (sheet.printer && wb.zip.file(sheet.printer)) printer = await wb.zip.file(sheet.printer)!.async('uint8array');
+  const firstRow = rows.reduce((x, r) => Math.min(x, r.r), Infinity), lastRow = rows.reduce((x, r) => Math.max(x, r.r), 0);
+  return { label, sheetName: sheet.name, headerRow: hrow.r, firstRow, lastRow,
+    rows, problems, printer, reportDate: null, sheetNames: wb.sheets.map(s => s.name), full: { total, asOf } };
 }
 
 /* ---------------------------------------------------------------- kitobni yig'ish */

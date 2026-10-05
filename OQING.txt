@@ -10,6 +10,13 @@ ISHLATISH
   Ro'yxat hisobot kunidan eski bo'lsa (masalan, kechagi fayl bugungi sana bilan), o'sha kuni hech
   narsa kelmagan bo'ladi: "Yangi kelgan" 0 ta, pastdagi ro'yxat oddiy qator bo'lib qoladi.
   Kechagi hisobot kerak bo'lsa - "sanani ... qilish" havolasini bosing.
+- Portalning TO'LIQ HISOBOTINI ham tashlash mumkin ("Танланган ташкилотнинг масалалари рўйхати",
+  56 ustunli, hamma holatdagi murojaatlar bilan). Undan faqat "Жараёнда" va "Янги" holatidagi,
+  "Юқори ташкилотлардан келиб тушган" yo'nalishidagilari olinadi (fuqarodan to'g'ridan-to'g'ri va
+  quyi tashkilotlarga kelganlar olinmaydi; Excel'da filtrlash shart emas), ustunlar svod ko'rinishiga keltiriladi va
+  "Ижрога йўналтирилган сана" bo'yicha tartiblanadi. Yangi kelganlar - hisobot kuni (sarlavhadagi
+  davr oxiri, masalan 05.10.2026 16:00) yo'naltirilganlar. Bu hisobotda "yangilangan sana" (N ustuni)
+  yo'q - tayyor faylda u bo'sh qoladi.
 - Svod varag'i ostidagi "жараён", "Лист2", "жараён (2)" yorliqlari bosilsa, o'sha varaq ko'rinadi.
 - "Tozalash" (svod oynasining o'ng yuqori burchagida): ikkala faylni, eslab qolingan svodni olib
   tashlaydi va sanani bugunga qaytaradi. Bosh sahifadagi "Oxirgi svod"ni o'chirish - uning ostidagi

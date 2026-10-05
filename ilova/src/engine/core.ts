@@ -18,6 +18,18 @@ export const MONTHS = ['янв', 'фев', 'мар', 'апр', 'май', 'июн
 export const SHEET_MAIN = 'жараён', SHEET_SVOD = 'Лист2', SHEET_SRC = 'жараён (2)';
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
+/** Portalning to'liq hisoboti («Танланган ташкилотнинг масалалари рўйхати»): svod ustuni -> hisobotdagi sarlavha */
+export const FULL = {
+  id: 'Мурожаат рақами', type: 'Мурожаат тури', task: 'Масала рақами', last: 'Фамилияси', first: 'Исми',
+  region: 'Яшаш ҳудуди', district: 'Яшаш туман (шаҳар)', tasnif: 'Масала', exec: 'Ижрочи ташкилот',
+  resp: 'Масъул ташкилот', cur: 'Кўриб чиқаётган ташкилот', deadline: 'Масаланинг умумий муддати',
+  sent: 'Ижрога йўналтирилган сана', status: 'Масала жорий ҳолати', dir: 'Мурожаат йўналиши',
+} as const;
+/** To'liq hisobotdan faqat shu holatdagilar olinadi — jarayondagi murojaatlar */
+export const IN_PROCESS = ['Жараёнда', 'Янги'];
+/** ...va faqat shu yo'nalishdagilar — portal ro'yxatidagidek (fuqarodan to'g'ridan-to'g'ri, quyi tashkilotlarga kelganlar olinmaydi) */
+export const FULL_DIR = 'Юқори ташкилотлардан келиб тушган';
+
 /** Standart qoidalar: portal tasnifi -> svoddagi toifa (foydalanuvchi shablonidan olingan) */
 export const BASE_RULES: ReadonlyArray<readonly [string, string]> = [
   ['Газ баллонни тўлдиришдаги муаммолар', 'СУГ'],
@@ -70,6 +82,11 @@ export interface Table {
   printer: Uint8Array | null;
   reportDate: string | null;   // oldingi hisobot bo'lsa: ISO sana (YYYY-MM-DD)
   sheetNames: string[];
+  full: FullReport | null;     // portalning to'liq hisobotidan olingan bo'lsa
+}
+export interface FullReport {
+  total: number;               // hisobotdagi barcha murojaatlar
+  asOf: number | null;         // hisobot qaysi paytgacha (Excel raqami): sarlavhadagi davr oxiri
 }
 
 export const emptyCell = (): Cell => ({ s: 0, kind: 'empty', text: '', raw: null, num: null, f: null });
@@ -176,7 +193,7 @@ export function dedupe(rows: Row[]): Row[] {
    Portalning ikkinchi ro'yxati jadval pastiga qo'shilgan.
    Belgi 1: «Ижрога йўналтирилган сана» tartibi qayta boshlanadi.
    Belgi 2: birinchi jadvalning oxirgi qatori (pastki chegarasiz). */
-export type DetectKind = 'restart' | 'none' | 'ends' | 'many';
+export type DetectKind = 'restart' | 'none' | 'ends' | 'many' | 'date';
 export interface Candidate { count: number; row: number }
 export interface Detect {
   count: number; sure: boolean; large?: boolean; kind: DetectKind;
@@ -203,6 +220,15 @@ export function detectNew(rows: Row[]): Detect {
   const withEnd = restarts.filter(b => ends.includes(b));
   const b = withEnd.length === 1 ? withEnd[0] : restarts[restarts.length - 1];
   return { count: n - b, sure: false, kind: 'many', boundaryRow: rows[b].r, tableEnd: ends.includes(b), candidates: restarts.map(at) };
+}
+
+/** To'liq hisobot: qatorlar «Ижрога йўналтирилган сана» bo'yicha tartiblangan, yangi kelganlar — hisobot kuni
+    yo'naltirilganlar (jadval oxirida). */
+export function detectByDay(rows: Row[], asOf: number | null): Detect {
+  const n = rows.length, d = asOf === null ? null : serialDay(asOf);
+  let b = n;
+  while (d !== null && b > 0 && rows[b - 1].m !== null && serialDay(rows[b - 1].m as number) >= d) b--;
+  return { count: n - b, sure: true, kind: 'date', boundaryRow: b < n ? rows[b].r : null, tableEnd: false, candidates: [] };
 }
 
 /* ---------------------------------------------------------------- svod */
@@ -251,6 +277,7 @@ export function compare(prevRows: Row[], rows: Row[]): Comparison {
   const key = unique(prevRows) && unique(rows) ? (r: Row) => r.id : (r: Row) => r.id + ' · ' + r.task;
   const P = new Map(prevRows.map(r => [key(r), r])), C = new Map(rows.map(r => [key(r), r]));
   const show = (c: Cell) => (c.kind === 'num' ? c.num : c.text);
+  const quotes = (t: string) => t.replace(/[“”„«»]/g, '"');           // portal ro'yxatlari qo'shtirnoqni har xil yozadi
   const removed = prevRows.filter(r => !C.has(key(r))), added = rows.filter(r => !P.has(key(r)));
   const changed: Comparison['changed'] = [];
   for (const r of rows) {
@@ -260,7 +287,8 @@ export function compare(prevRows: Row[], rows: Row[]): Comparison {
     for (let j = 1; j < 14; j++) {
       if (j === 7) continue;
       const a = p.v[j], b = r.v[j];
-      const same = a.kind === b.kind && (a.kind === 'num' ? Math.abs((a.num as number) - (b.num as number)) < 1e-9 : a.text === b.text);
+      if (j === 13 && b.kind === 'empty') continue;                    // to'liq hisobotda yangilanish sanasi yo'q
+      const same = a.kind === b.kind && (a.kind === 'num' ? Math.abs((a.num as number) - (b.num as number)) < 1e-9 : quotes(a.text) === quotes(b.text));
       if (!same) diffs.push({ col: COLS[j], header: HEADERS[j], date: j >= 12, from: show(a), to: show(b) });
     }
     if (diffs.length) changed.push({ row: r, diffs });

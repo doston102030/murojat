@@ -1,6 +1,6 @@
 /* Interfeys <-> dvigatel (Web Worker) o'rtasidagi xabarlar.
    Og'ir ma'lumot (qatorlar, kataklar) Worker'da qoladi; interfeysga faqat ko'rsatish uchun ixcham ko'rinishlar keladi. */
-import type { Detect, Unknown, DateLabels } from './core';
+import type { Detect, Unknown, DateLabels, FullReport } from './core';
 import type { VerifyResult } from './xlsx';
 
 export type Which = 'exp' | 'prev';
@@ -16,8 +16,10 @@ export interface DisplayRow {
 export interface TableInfo {
   name: string; sheetName: string; headerRow: number; firstRow: number; lastRow: number; rowCount: number;
   problems: string[]; problemCount: number; reportDate: string | null;
-  /** «№» (N) ustunidagi eng so'nggi sana (Excel raqami) */
+  /** «№» (N) ustunidagi eng so'nggi sana (Excel raqami); to'liq hisobotda — hisobot qaysi paytgacha */
   lastUpd: number | null;
+  /** portalning to'liq hisobotidan olingan bo'lsa: hisobotdagi jami murojaatlar */
+  full: FullReport | null;
 }
 export interface ExpInfo extends TableInfo { det: Detect; rows: DisplayRow[] }
 

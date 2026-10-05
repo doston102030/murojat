@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
 import {
-  BASE_RULES, EngineError, classify, compare, dateLabels, detectNew, findDuplicates, dedupe, rulesMap, svod, textToSerial, fmtSerial,
+  BASE_RULES, EngineError, classify, compare, dateLabels, detectByDay, detectNew, findDuplicates, dedupe, rulesMap, svod, textToSerial, fmtSerial,
 } from '../src/engine/core';
 import { build, readTable, verify } from '../src/engine/xlsx';
 import { parse, sax, findAll, textOf, nsAttr, XmlError } from '../src/engine/xml';
-import { day, portalFile, portalRows } from './fixture';
+import { day, fullReportFile, portalFile, portalRows, type FullRow } from './fixture';
 
 describe('sana yorliqlari', () => {
   it('tanlangan sanadan svod va fayl nomi yorliqlari', () => {
@@ -89,6 +89,64 @@ describe('portal faylini o\'qish', () => {
       '5-qator: «Ижрога йўналтирилган сана» sanaga o\'xshamaydi («ertaga»)',
       '6-qator: ijrochi tashkilot (I ustuni) bo\'sh',
     ]);
+  });
+});
+
+describe('portalning to\'liq hisoboti', () => {
+  const list = (): FullRow[] => [
+    { id: '100/26', status: 'Кўриб чиқилган', sent: day('2026-09-01', 10) },
+    { id: '101/26', status: 'Жараёнда', sent: day('2026-10-05', 9), deadline: day('2026-10-20', 0), type: 'Шикоят', task: 2 },
+    { id: '102/26', status: 'Янги', sent: day('2026-09-20', 11, 30), deadline: day('2026-10-20', 0) },
+    { id: '103/26', status: 'Жараёнда', sent: '04.10.2026 15:00', deadline: '19.10.2026' },
+    { id: '104/26', status: 'Кўриб чиқилган', sent: day('2026-10-05', 8) },
+    { id: '105/26', status: 'Жараёнда', sent: day('2026-10-05', 12) },
+    { id: '106/26', status: 'Жараёнда', sent: day('2026-10-05', 13), dir: 'Мурожаат этувчилардан тўғридан-тўғри келиб тушган' },
+    { id: '107/26', status: 'Янги', sent: day('2026-10-02', 13), dir: 'Қуйи ташкилотлар назоратида' },
+  ];
+
+  it('jarayondagi va yuqoridan kelganlarini ajratadi, ustunlarni portal ro\'yxatiga keltiradi va sana bo\'yicha tartiblaydi', async () => {
+    const t = await readTable(await fullReportFile(list()), 'P');
+    expect(t.full).toEqual({ total: 8, asOf: day('2026-10-05', 16) });
+    expect(t.problems).toEqual([]);
+    expect(t.headerRow).toBe(3);
+    expect(t.rows.map(r => r.id)).toEqual(['102/26', '103/26', '101/26', '105/26']);
+    const r = t.rows[2];
+    expect(r.v.map(c => c.text).slice(0, 12)).toEqual(['101/26', '2-Шикоят', 'Фамилия1', 'Исм1', 'Андижон вилояти', 'Асака тумани',
+      BASE_RULES[1][0], '', 'Ташкилот 1', '"Ҳудудгазтаъминот" АЖ', 'Ташкилот 1', '15 кун (20.10.2026)']);
+    expect(r.v[12]).toMatchObject({ kind: 'num', num: day('2026-10-05', 9) });
+    expect(r.v[13].kind).toBe('empty');
+    expect(t.rows[1].v[11].text).toBe('15 кун (19.10.2026)');          // matn ko'rinishidagi sanalar ham
+    expect(t.rows[1].m).toBeCloseTo(day('2026-10-04', 15), 9);
+    expect(detectByDay(t.rows, t.full!.asOf)).toMatchObject({ kind: 'date', sure: true, count: 2, boundaryRow: 5 });
+  });
+
+  it('sarlavhada davr bo\'lmasa — hisobot kuni eng oxirgi yo\'naltirilgan sanadan', async () => {
+    const t = await readTable(await fullReportFile(list().slice(0, 4), 'Рўйхат'), 'P');
+    expect(t.full!.asOf).toBe(day('2026-10-05', 9));
+    expect(detectByDay(t.rows, t.full!.asOf).count).toBe(1);
+  });
+
+  it('yig\'ilgan kitob tekshiruvdan o\'tadi', async () => {
+    const t = await readTable(await fullReportFile(list()), 'P');
+    expect(classify(t.rows, rulesMap())).toEqual([]);
+    const model = { rows: t.rows, newCount: 2, date: '2026-10-05', printer: null };
+    const v = await verify((await build(model)).bytes, model);
+    expect(v.errors).toEqual([]);
+  });
+
+  it('ustun yetishmasa yoki jarayondagi murojaat bo\'lmasa — tushunarli xato', async () => {
+    const zip = await JSZip.loadAsync(await fullReportFile(list()));
+    const s = await zip.file('xl/worksheets/sheet1.xml')!.async('string');
+    zip.file('xl/worksheets/sheet1.xml', s.replace('Ижрочи ташкилот<', 'Ижрочи<'));
+    await expect(readTable(await zip.generateAsync({ type: 'uint8array' }), 'P')).rejects.toMatchObject({ items: ['«Ижрочи ташкилот» ustuni topilmadi'] });
+    await expect(readTable(await fullReportFile([list()[0]]), 'P')).rejects.toThrow(/jarayondagi murojaat yo'q/);
+  });
+
+  it('oldingi hisobot bilan solishtirish: yo\'q yangilanish sanasi va qo\'shtirnoq turi o\'zgarish emas', async () => {
+    const prev = await readTable(await portalFile([['101/26', '2-Шикоят', 'Фамилия1', 'Исм1', 'Андижон вилояти', 'Асака тумани', BASE_RULES[1][0], null,
+      'Ташкилот 1', '“Ҳудудгазтаъминот” АЖ', 'Ташкилот 1', '15 кун (20.10.2026)', day('2026-10-05', 9), day('2026-10-05', 10)]]), 'P');
+    const t = await readTable(await fullReportFile(list()), 'P');
+    expect(compare(prev.rows, t.rows).changed).toEqual([]);
   });
 });
 

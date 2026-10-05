@@ -2,7 +2,7 @@
    Odatda Web Worker ichida ishlaydi (worker.ts); Worker ochilmasa — asosiy oqimda (zaxira yo'l).
    Har bir so'rovda id/seq bor: eskirgan javob hech qachon yangi holatni bosib ketmaydi. */
 import {
-  classify, compare, detectNew, dedupe, findDuplicates, fmtSerial, norm, rulesMap, svod,
+  classify, compare, detectByDay, detectNew, dedupe, findDuplicates, fmtSerial, norm, rulesMap, svod,
   type Row, type Table, type Svod,
 } from './core';
 import { build, readTable, verify } from './xlsx';
@@ -29,17 +29,17 @@ export function svodView(sv: Svod): SvodView {
 }
 
 function tableInfo(name: string, t: Table, rows: Row[]): TableInfo {
-  let lastUpd: number | null = null;
-  for (const r of rows) { const c = r.v[13]; if (c.kind === 'num' && (lastUpd === null || (c.num as number) > lastUpd)) lastUpd = c.num; }
+  let lastUpd: number | null = t.full ? t.full.asOf : null;          // to'liq hisobotda — hisobot paytining o'zi
+  if (!t.full) for (const r of rows) { const c = r.v[13]; if (c.kind === 'num' && (lastUpd === null || (c.num as number) > lastUpd)) lastUpd = c.num; }
   return {
-    name, sheetName: t.sheetName, headerRow: t.headerRow, firstRow: rows.length ? rows[0].r : t.firstRow,
-    lastRow: rows.length ? rows[rows.length - 1].r : t.lastRow, rowCount: rows.length,
-    problems: t.problems.slice(0, 50), problemCount: t.problems.length, reportDate: t.reportDate, lastUpd,
+    name, sheetName: t.sheetName, headerRow: t.headerRow, firstRow: rows.length && !t.full ? rows[0].r : t.firstRow,
+    lastRow: rows.length && !t.full ? rows[rows.length - 1].r : t.lastRow, rowCount: rows.length,
+    problems: t.problems.slice(0, 50), problemCount: t.problems.length, reportDate: t.reportDate, lastUpd, full: t.full,
   };
 }
 function expInfo(name: string, t: Table, rows: Row[]): ExpInfo {
   return {
-    ...tableInfo(name, t, rows), det: detectNew(rows),
+    ...tableInfo(name, t, rows), det: t.full ? detectByDay(rows, t.full.asOf) : detectNew(rows),
     rows: rows.map((r): DisplayRow => ({
       r: r.r, id: r.id, linkA: r.linkA, person: person(r), district: r.v[5].text, org: r.org,
       deadline: showDate(r.v[11], true), sent: showDate(r.v[12]), upd: showDate(r.v[13]),

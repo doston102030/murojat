@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BASE_RULES } from '../../src/engine/core';
 import { readTable } from '../../src/engine/xlsx';
-import { portalFile, portalRows, type Val } from '../fixture';
+import { day, fullReportFile, portalFile, portalRows, type Val } from '../fixture';
 import { launch, type Page } from './cdp';
 
 const HTML = resolve(import.meta.dirname, '..', '..', '..', 'jarayon-svodi.html');
@@ -248,6 +248,24 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await page.run(() => t().wait("t.text().includes('Fayl kutilmoqda') && !t.$('#lastClear')", 'svod o\'chirildi'));
     await open();
     expect(await page.run(() => t().text())).toContain('Fayl kutilmoqda');
+  });
+
+  it('portalning to\'liq hisoboti: jarayondagilari ajratiladi, yangi kelganlar sanadan — savolsiz', async () => {
+    await open();
+    const list = [
+      { id: 'FULL-1', status: 'Жараёнда', sent: day('2026-10-01', 9), deadline: day('2026-10-16', 0) },
+      { id: 'FULL-2', status: 'Кўриб чиқилган', sent: day('2026-10-02', 9) },
+      { id: 'FULL-3', status: 'Янги', sent: day('2026-10-05', 10), deadline: day('2026-10-20', 0) },
+      { id: 'FULL-4', status: 'Жараёнда', sent: day('2026-10-03', 9), deadline: day('2026-10-18', 0) },
+      { id: 'FULL-5', status: 'Жараёнда', sent: day('2026-10-05', 11), dir: 'Қуйи ташкилотларга келиб тушган' },
+    ];
+    await page.run((d: string) => { t().set('#sana', '2026-10-05'); t().file('#fileExp', d, 'toliq-hisobot.xlsx'); }, b64(await fullReportFile(list)));
+    await page.run(() => t().wait("t.ready() && t.text().includes('05.10.2026й.xlsx')", 'to\'liq hisobotdan fayl'));
+    const text = await page.run(() => t().text());
+    expect(text).toContain('Portalning to\'liq hisoboti («0-50000» varag\'i): 5 ta murojaatdan 3 tasi olindi');
+    expect(text).toContain('Yangi kelganlar: 1 ta');
+    expect(text).toContain('hisobot kuni kelganlar');
+    await shot('5c-toliq-hisobot');
   });
 
   it('katta fayl (20 000 qator): sahifa qotmaydi', async () => {
