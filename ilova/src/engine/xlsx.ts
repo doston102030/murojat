@@ -389,7 +389,7 @@ function pivotTableXml(sv: Svod): string {
   return S.pt_open + `<location ref="A3:${last}" firstHeaderRow="1" firstDataRow="2" firstDataCol="1"/>` +
     '<pivotFields count="4"><pivotField dataField="1" showAll="0"/>' +
     `<pivotField axis="axisCol" showAll="0"><items count="${k + 1}">${items(sv.cats, sv.catIdx)}</items></pivotField>` +
-    `<pivotField axis="axisRow" showAll="0"><items count="${m + 1}">${items(sv.orgs, sv.orgIdx)}</items></pivotField>` +
+    `<pivotField axis="axisRow" showAll="1"><items count="${m + 1}">${items(sv.orgs, sv.orgIdx)}</items></pivotField>` +
     '<pivotField showAll="0"/></pivotFields><rowFields count="1"><field x="2"/></rowFields>' +
     `<rowItems count="${m + 1}">${seq(m)}</rowItems><colFields count="1"><field x="1"/></colFields><colItems count="${k + 1}">${seq(k)}</colItems>` +
     S.pt_data + `<formats count="${fm.length}">${fm.join('')}</formats>` +
@@ -592,7 +592,7 @@ export async function verify(bytes: Uint8Array, model: { rows: Row[]; newCount: 
   const D = dateLabels(model.date);
   if (txt('A1') !== TITLE) add('Лист2: sarlavha boshqacha');
   if (txt(NJ + '2') !== D.sheet || txt(NJ + '4') !== D.newCol) add('Лист2: sana yorlig\'i boshqacha');
-  if (new Set(cats).size !== new Set(rows.map(r => r.cat)).size || new Set(orgs).size !== new Set(rows.map(r => r.org)).size) add('Лист2: toifa yoki bo\'limlar soni mos emas');
+  if (new Set(cats).size !== new Set(rows.map(r => r.cat)).size || orgs.length !== svod(rows, model.newCount).orgs.length) add('Лист2: toifa yoki bo\'limlar soni mos emas');
   let sum = 0, sumNew = 0;
   orgs.forEach((o, i) => {
     const r = 5 + i; let tot = 0;

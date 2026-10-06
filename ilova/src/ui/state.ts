@@ -76,15 +76,16 @@ export function mergeRules(base: RulePair[], pairs: RulePair[]): RulePair[] {
   return Array.from(m);
 }
 
-/** Yangi kelganlar soni sanaga qarab. Ro'yxat hisobot kunidan eski bo'lsa — o'sha kuni hech narsa kelmagan: 0
-    (foydalanuvchi aynan shu sana uchun qo'lda boshqa son qo'ymagan bo'lsa).
-    Aks holda — foydalanuvchi tasdiqlagan son yoki pastdagi (ikkinchi) ro'yxat. */
+/** Yangi kelganlar soni: hisobot kuni (s.date) yo'naltirilgan murojaatlar. Ro'yxat hisobot kunidan eski bo'lsa — o'sha kuni
+    hech narsa kelmagan: 0 (foydalanuvchi aynan shu sana uchun qo'lda boshqa son qo'ygan bo'lsa, o'sha).
+    Aks holda — foydalanuvchi qo'lda yozgan son yoki ro'yxatdagi kun bo'yicha son. */
 function settle(s: State): State {
   const info = s.exp.status === 'ready' ? s.exp.info : null;
   if (!info) return { ...s, newCount: 0, newOk: false, editNew: false };
   if (staleDay(s)) return { ...s, newCount: s.force && s.force.date === s.date ? s.force.n : 0, newOk: true };
   if (s.pick !== null) return { ...s, newCount: s.pick, newOk: true };
-  return { ...s, newCount: info.det.count, newOk: info.det.sure };
+  const d = info.det;
+  return { ...s, newCount: d.days ? d.days[s.date] || 0 : d.count, newOk: d.sure };
 }
 
 export function reducer(s: State, a: Action): State {

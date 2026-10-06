@@ -4,15 +4,15 @@ import type { ExpInfo } from '../src/engine/protocol';
 import { initState, reducer, staleDay, type State } from '../src/ui/state';
 import { day } from './fixture';
 
-const info = (lastUpd: number | null, sure = true): ExpInfo => ({
+const info = (lastUpd: number | null): ExpInfo => ({
   name: 'Янги.xlsx', sheetName: 'жараён', headerRow: 2, firstRow: 4, lastRow: 125, rowCount: 122,
   problems: [], problemCount: 0, reportDate: null, lastUpd, full: null, rows: [],
-  det: { count: 29, sure, kind: sure ? 'restart' : 'many', boundaryRow: 97, tableEnd: true, candidates: [{ count: 29, row: 97 }] },
+  det: { count: 0, sure: true, kind: 'day', boundaryRow: null, days: { '2026-10-03': 29 } },
 });
-const loaded = (date: string, lastUpd: number | null, sure = true): State => {
+const loaded = (date: string, lastUpd: number | null): State => {
   let s = reducer(initState([], null), { type: 'setDate', date });
   s = reducer(s, { type: 'loadStart', which: 'exp', id: 1, name: 'Янги.xlsx' });
-  return reducer(s, { type: 'loaded', which: 'exp', id: 1, info: info(lastUpd, sure) });
+  return reducer(s, { type: 'loaded', which: 'exp', id: 1, info: info(lastUpd) });
 };
 const kecha = day('2026-10-03', 16, 45);
 
@@ -37,9 +37,8 @@ describe('yangi kelganlar — sanaga qarab', () => {
     const again = reducer(forced, { type: 'loaded', which: 'exp', id: 1, info: info(kecha) });
     expect(again.newCount).toBe(0);                                                              // fayl qayta o'qilsa — qo'lda qo'yilgani unutiladi
   });
-  it('sana ro\'yxat kuniga qaytsa — yana pastdagi ro\'yxat; tasdiqlangan son saqlanadi', () => {
-    const s = loaded('2026-10-03', kecha, false);
-    expect(s.newOk).toBe(false);
+  it('sana ro\'yxat kuniga qaytsa — yana kun bo\'yicha son; tasdiqlangan son saqlanadi', () => {
+    const s = loaded('2026-10-03', kecha);
     const picked = reducer(s, { type: 'pickNew', n: 5 });
     expect([picked.newCount, picked.newOk]).toEqual([5, true]);
     const ahead = reducer(picked, { type: 'setDate', date: '2026-10-04' });
@@ -47,9 +46,10 @@ describe('yangi kelganlar — sanaga qarab', () => {
     const back = reducer(ahead, { type: 'setDate', date: '2026-10-03' });
     expect([back.newCount, back.newOk]).toEqual([5, true]);
   });
-  it('ro\'yxat hisobot sanasidan keyingi kunniki yoki yangilanish sanasi yo\'q — pastdagi ro\'yxat', () => {
-    expect(loaded('2026-10-02', kecha).newCount).toBe(29);
-    expect(loaded('2026-10-04', null).newCount).toBe(29);
+  it('hisobot kuni boshqa kun bo\'lsa — o\'sha kunning soni (yo\'q bo\'lsa 0); yangilanish sanasi yo\'q bo\'lsa ham', () => {
+    expect(loaded('2026-10-02', kecha).newCount).toBe(0);
+    expect(loaded('2026-10-04', null).newCount).toBe(0);
+    expect(loaded('2026-10-03', null).newCount).toBe(29);
   });
 });
 

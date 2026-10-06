@@ -46,6 +46,7 @@ export interface Analysis {
   preview: SvodView | null;      // toifasi yo'q tasnif bo'lsa — null
   catNames: string[];
   rowCat: Int32Array;            // har qator uchun catNames indeksi, -1 — toifa yo'q
+  newFlags: Uint8Array;          // har qator uchun: 1 — yangi kelgan (ko'rsatilgan tartibda)
   cmp: CmpView | null;
   willBuild: boolean;            // hammasi joyida — fayl yig'ilmoqda
 }

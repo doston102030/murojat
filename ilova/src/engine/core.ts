@@ -29,6 +29,20 @@ export const FULL = {
 export const IN_PROCESS = ['Жараёнда', 'Янги'];
 /** ...va faqat shu yo'nalishdagilar — portal ro'yxatidagidek (fuqarodan to'g'ridan-to'g'ri, quyi tashkilotlarga kelganlar olinmaydi) */
 export const FULL_DIR = 'Юқори ташкилотлардан келиб тушган';
+/** Svoddagi tashkilotlar shabloni: 18 ta qator, har doim shu tartibda. Ma'lumotda yo'q bo'lsa ham 0 bilan turadi.
+    Ro'yxatda yo'q (noma'lum) tashkilotlar oxirida, alifbo bo'yicha chiqadi. */
+export const ORG_ORDER = [
+  '"Ҳудудгаз Андижон" газ таъминоти филиали', '"Андижоншаҳаргаз" газ таъминоти бўлими', '"Хонабодшаҳаргаз" газ таъминоти бўлими',
+  '"Андижонтумангаз" газ таъминоти бўлими', '"Асакатумангаз" газ таъминоти бўлими', '"Балиқчитумангаз" газ таъминоти бўлими',
+  '"Булоқбошитумангаз" газ таъминоти бўлими', '"Бўстонтумангаз" газ таъминоти бўлими', '"Жалақудуқтумангаз" газ таъминоти бўлими',
+  '"Избоскантумангаз" газ таъминоти бўлими', '"Мархаматтумангаз" газ таъминоти бўлими', '"Олтинкўлтумангаз" газ таъминоти бўлими',
+  '"Пахтаободтумангаз" газ таъминоти бўлими', '"Улуғнортумангаз" газ таъминоти бўлими', '"Хўжаободтумангаз" газ таъминоти бўлими',
+  '"Шаҳрихонтумангаз" газ таъминоти бўлими', '"Қўрғонтепатумангаз" газ таъминоти бўлими', '"Қорасувшаҳаргаз" газ таъминоти бўлими',
+];
+/** Tashkilot nomi — qo'shtirnoq ichidagi qism (qolgan «газ таъминоти …» qismi bilan farq qilmaydi) */
+const orgName = (org: string): string => org.match(/"([^"]+)"/)?.[1] ?? org;
+const ORG_NAMES = ORG_ORDER.map(orgName);
+export const orgRank = (org: string): number => { const i = ORG_NAMES.indexOf(orgName(org)); return i < 0 ? ORG_ORDER.length : i; };
 
 /** Standart qoidalar: portal tasnifi -> svoddagi toifa (foydalanuvchi shablonidan olingan) */
 export const BASE_RULES: ReadonlyArray<readonly [string, string]> = [
@@ -190,36 +204,25 @@ export function dedupe(rows: Row[]): Row[] {
 }
 
 /* ---------------------------------------------------------------- yangi kelganlar
-   Portalning ikkinchi ro'yxati jadval pastiga qo'shilgan.
-   Belgi 1: «Ижрога йўналтирилган сана» tartibi qayta boshlanadi.
-   Belgi 2: birinchi jadvalning oxirgi qatori (pastki chegarasiz). */
-export type DetectKind = 'restart' | 'none' | 'ends' | 'many' | 'date';
-export interface Candidate { count: number; row: number }
+   Qoida: yangi kelgan = «Ижрога йўналтирилган сана» hisobot kuni (YYYY-MM-DD) bo'lgan murojaat.
+   Oddiy ro'yxatda u kunlar bo'yicha sanaladi; hisobot kuni tanlanganda shu kunning soni olinadi. */
+export type DetectKind = 'day' | 'date';
 export interface Detect {
-  count: number; sure: boolean; large?: boolean; kind: DetectKind;
-  boundaryRow: number | null; tableEnd: boolean; candidates: Candidate[];
+  count: number; sure: boolean; kind: DetectKind; boundaryRow: number | null;
+  days?: Record<string, number>;               // oddiy ro'yxat: har bir kun bo'yicha yo'naltirilgan murojaatlar soni
 }
 export function detectNew(rows: Row[]): Detect {
-  const n = rows.length, restarts: number[] = [];
-  for (let i = 1; i < n; i++) { const a = rows[i - 1].m, b = rows[i].m; if (a !== null && b !== null && b < a) restarts.push(i); }
-  let ends: number[] = [];
-  for (let i = 0; i < n - 1; i++) if (rows[i].tableEnd) ends.push(i + 1);
-  if (ends.length > Math.max(3, n * 0.1)) ends = [];
-  const at = (b: number): Candidate => ({ count: n - b, row: rows[b].r });
-  if (restarts.length === 1) {
-    const b = restarts[0];
-    const large = n - b > b;                         // "yangi" blok asosiy ro'yxatdan katta — tartib adashgan bo'lishi mumkin
-    return { count: n - b, sure: !large, large, kind: 'restart', boundaryRow: rows[b].r, tableEnd: ends.includes(b), candidates: [at(b)] };
-  }
-  if (restarts.length === 0) {
-    if (!ends.length) return { count: 0, sure: false, kind: 'none', boundaryRow: null, tableEnd: false, candidates: [] };
-    const page = ends.length === 1 && ends[0] % 100 === 0;   // portal sahifasi chegarasi (100 tadan)
-    const b = ends[ends.length - 1];
-    return { count: page ? 0 : n - b, sure: false, kind: 'ends', boundaryRow: page ? null : rows[b].r, tableEnd: true, candidates: ends.map(at) };
-  }
-  const withEnd = restarts.filter(b => ends.includes(b));
-  const b = withEnd.length === 1 ? withEnd[0] : restarts[restarts.length - 1];
-  return { count: n - b, sure: false, kind: 'many', boundaryRow: rows[b].r, tableEnd: ends.includes(b), candidates: restarts.map(at) };
+  const days: Record<string, number> = {};
+  for (const r of rows) if (r.m !== null) { const k = serialDay(r.m); days[k] = (days[k] || 0) + 1; }
+  return { count: 0, sure: true, kind: 'day', boundaryRow: null, days };
+}
+
+/** Hisobot kuni (YYYY-MM-DD) yo'naltirilgan qatorlarni pastga o'tkazadi; qolganlarining tartibi saqlanadi.
+    Yangi kelganlar — qatorlarning oxirgi `count` tasi (build/svod shunga tayanadi). */
+export function splitByDay(rows: Row[], day: string): { rows: Row[]; count: number } {
+  const old: Row[] = [], fresh: Row[] = [];
+  for (const r of rows) (r.m !== null && serialDay(r.m) === day ? fresh : old).push(r);
+  return { rows: old.concat(fresh), count: fresh.length };
 }
 
 /** To'liq hisobot: qatorlar «Ижрога йўналтирилган сана» bo'yicha tartiblangan, yangi kelganlar — hisobot kuni
@@ -228,7 +231,7 @@ export function detectByDay(rows: Row[], asOf: number | null): Detect {
   const n = rows.length, d = asOf === null ? null : serialDay(asOf);
   let b = n;
   while (d !== null && b > 0 && rows[b - 1].m !== null && serialDay(rows[b - 1].m as number) >= d) b--;
-  return { count: n - b, sure: true, kind: 'date', boundaryRow: b < n ? rows[b].r : null, tableEnd: false, candidates: [] };
+  return { count: n - b, sure: true, kind: 'date', boundaryRow: b < n ? rows[b].r : null };
 }
 
 /* ---------------------------------------------------------------- svod */
@@ -248,7 +251,9 @@ export function svod(rows: Row[], newCount: number): Svod {
     if (!ci.has(cat)) { ci.set(cat, catFirst.length); catFirst.push(cat); }
     if (!oi.has(r.org)) { oi.set(r.org, orgFirst.length); orgFirst.push(r.org); }
   }
-  const cats = catFirst.slice().sort(collator.compare), orgs = orgFirst.slice().sort(collator.compare);
+  const have = new Set(orgFirst.map(orgName));
+  for (const o of ORG_ORDER) if (!have.has(orgName(o))) { oi.set(o, orgFirst.length); orgFirst.push(o); }   // shablondagi, ma'lumotda yo'qlari — 0 bilan
+  const cats = catFirst.slice().sort(collator.compare), orgs = orgFirst.slice().sort((a, b) => orgRank(a) - orgRank(b) || collator.compare(a, b));
   const cnt = orgs.map(() => cats.map(() => 0)), newBy = orgs.map(() => 0);
   const cpos = new Map(cats.map((c, i) => [c, i])), opos = new Map(orgs.map((o, i) => [o, i]));
   rows.forEach((r, i) => {

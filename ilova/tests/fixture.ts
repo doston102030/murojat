@@ -61,14 +61,15 @@ export async function portalFile(rows: Val[][], o: FixtureOpts = {}): Promise<Ui
 /** Excel sana raqami: 2026-10-01 00:00 = 46296 */
 export const day = (iso: string, hh = 9, mm = 0) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10), hh, mm) / 86400000 + 25569;
 
-/** n ta qator: asosiy ro'yxat + oxirida nNew ta yangi kelgan (sana tartibi qayta boshlanadi) */
+/** n ta qator: asosiy ro'yxat + oxirida nNew ta yangi kelgan (hisobot kuni 2026-10-03 da yo'naltirilgan) */
 export function portalRows(n: number, nNew: number, orgCount = 6): Val[][] {
   const main = n - nNew, out: Val[][] = [];
   for (let i = 0; i < n; i++) {
     const isNew = i >= main, k = isNew ? i - main : i;
     const org = 'Ташкилот ' + ((i % orgCount) + 1);
     out.push([`REQ-${100000 + i}`, String(1 + (i % 3)), 'Фамилия' + (i % 97), 'Исм' + (i % 31), 'Андижон вилояти', 'Туман ' + (i % 7),
-      BASE_RULES[i % BASE_RULES.length][0], null, org, org, org, day('2026-10-20', 0), day('2026-09-01') + k * 0.001, day('2026-10-02') + (i % 50) * 0.01]);
+      BASE_RULES[i % BASE_RULES.length][0], null, org, org, org, day('2026-10-20', 0),
+      (isNew ? day('2026-10-03', 9) + k * 0.00001 : day('2026-09-01') + k * 0.001), day('2026-10-03', 10) + (i % 50) * 0.01]);
   }
   return out;
 }

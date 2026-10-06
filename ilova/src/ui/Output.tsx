@@ -45,46 +45,37 @@ function Tabs({ tabs, cur, onTab, tag, children }: { tabs: Array<[Tab, string, n
 
 /* ---------------------------------------------------------------- yangi kelganlar */
 function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Dispatch<Action> }) {
-  const n = info.rowCount, d = info.det, k = s.newCount;
+  const n = info.rowCount, k = s.newCount;
   const [val, setVal] = useState(String(k));
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { setVal(String(k)); }, [k, s.editNew]);
   useEffect(() => { if (s.editNew) input.current?.focus(); }, [s.editNew]);
 
-  const first = k > 0 ? info.rows[n - k] : null;
-  const range = first ? <>{4 + n - k}–{3 + n}-qatorlar (tayyor faylda), birinchisi {first.id}{first.person ? ' — ' + first.person : ''}</> : <>yangi kelgan yo'q</>;
   const stale = staleDay(s), want = dateLabels(s.date), got = stale ? dateLabels(stale) : null;
   if (stale && got && !s.editNew) {
     return (
       <Check kind="ok" title={k ? `Yangi kelganlar: ${nf(k)} ta` : `Yangi kelganlar: 0 ta — ${want.dmy} kuni kelgan murojaat yo'q`}>
         <span id="staleNew">Ro'yxat {got.dmy} kuniniki ({info.full ? 'hisobot holati' : 'oxirgi yangilanish'} {fmtSerial(info.lastUpd)}).
-          {k ? <> {range}. Son siz qo'ygan bo'yicha olindi.</>
-            : d.count ? ` Pastdagi ${nf(d.count)} ta murojaat ${got.dmy} gacha kelgan: ular «${want.newCol}» qilinmaydi, oddiy qator bo'lib qoladi.` : null}</span>
+          {k ? ' Son siz qo\'ygan bo\'yicha olindi.' : ` ${want.dmy} kuni yo'naltirilgan murojaat yo'q.`}</span>
         <span>{got.dmy} hisoboti kerak bo'lsa — <button type="button" className="btn link" data-act="useListDay" onClick={() => dispatch({ type: 'setDate', date: stale })}>sanani {got.dmy} qilish</button>.
           {' '}<button type="button" className="btn link" data-act="editNew" onClick={() => dispatch({ type: 'editNew' })}>O'zgartirish</button></span>
       </Check>
     );
   }
   if (s.newOk && !s.editNew) {
-    const day = listDay(info), dmy = day ? dateLabels(day).dmy : '';
-    const why = d.kind === 'restart' && k === d.count
-      ? `«Ижрога йўналтирилган сана» tartibi manbadagi ${d.boundaryRow}-qatordan qayta boshlanadi` + (d.tableEnd ? ', birinchi jadval ham shu yerda tugagan.' : '.')
-      : d.kind === 'date' && k === d.count
-      ? (k ? `«Ижрога йўналтирилган сана» ${dmy} bo'lganlar — hisobot kuni kelganlar.` : `Hisobot kuni (${dmy}) yo'naltirilgan murojaat yo'q.`)
-      : 'Son siz tasdiqlagan bo\'yicha olindi.';
+    const dmy = dateLabels(info.full ? listDay(info) ?? s.date : s.date).dmy;
+    const why = s.pick !== null ? 'Son siz tasdiqlagan bo\'yicha olindi.'
+      : k ? `«Ижрога йўналтирилган сана» ${dmy} bo'lganlar — hisobot kuni kelganlar.`
+      : `Hisobot kuni (${dmy}) yo'naltirilgan murojaat yo'q.`;
     return (
       <Check kind="ok" title={`Yangi kelganlar: ${nf(k)} ta`}>
-        <span>{range}. {why}</span>
+        <span>{why}</span>
         <span><button type="button" className="btn link" data-act="editNew" onClick={() => dispatch({ type: 'editNew' })}>O'zgartirish</button></span>
       </Check>
     );
   }
   const why = got ? `Ro'yxat ${got.dmy} kuniniki. Jadval oxiridan nechta qator «${want.newCol}» bo'lib yozilsin?`
-    : s.editNew && s.newOk ? 'Jadval oxiridan nechta qator yangi kelganlar ro\'yxatiga tegishli?'
-    : d.kind === 'none' ? 'Ikkinchi ro\'yxat belgisi topilmadi: sanalar boshidan oxirigacha o\'sib boradi. Pastga yangi kelganlar qo\'shilgan bo\'lsa, nechta ekanini yozing; qo\'shilmagan bo\'lsa, 0 qoldiring.'
-    : d.kind === 'ends' ? 'Jadval ichida birinchi ro\'yxat tugagan joy bor, lekin sanalar tartibi uzilmagan. Undan pastdagi qatorlar yangi kelganlarmi yoki shu ro\'yxatning davomimi?'
-    : d.kind === 'many' ? 'Sanalar tartibi bir necha joyda qayta boshlanadi. Yangi kelganlar qaysi qatordan boshlanishini tanlang.'
-    : 'Pastdagi blok asosiy ro\'yxatdan katta chiqdi. Odatda yangi kelganlar ro\'yxati kichikroq va eng pastda turadi.';
+    : 'Yangi kelganlar sonini qo\'lda yozing. Odatda u hisobot kuni bo\'yicha olinadi.';
   const parsed = Number(val), valid = val.trim() !== '' && Number.isInteger(parsed) && parsed >= 0 && parsed <= n;
   const confirm = () => { if (valid) dispatch({ type: 'pickNew', n: parsed }); else input.current?.focus(); };
   return (
@@ -92,7 +83,6 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
       <div className="need">
         <span>{why}</span>
         <div className="chips">
-          {d.candidates.map(c => <button type="button" className="btn sm" key={c.row} data-act="pickNew" data-n={c.count} onClick={() => dispatch({ type: 'pickNew', n: c.count })}>{c.count} ta (manbadagi {c.row}-qatordan)</button>)}
           <button type="button" className="btn sm" data-act="pickNew" data-n="0" onClick={() => dispatch({ type: 'pickNew', n: 0 })}>0 ta</button>
         </div>
         <div className="row">
@@ -101,7 +91,7 @@ function NewBlock({ s, info, dispatch }: { s: State; info: ExpInfo; dispatch: Di
             onChange={e => setVal(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirm(); } }} />
           <button type="button" className="btn" data-act="confirmNew" onClick={confirm}>Tasdiqlash</button>
         </div>
-        <span>Hozirgi tanlov: {range}.</span>
+        <span>Hozirgi tanlov: {nf(k)} ta.</span>
       </div>
     </Check>
   );

@@ -107,14 +107,13 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await shot('1-bosh');
   });
 
-  it('kichik fayl: yangi kelganlar soni so\'raladi → tasdiqlash → yig\'ish va tekshiruv', async () => {
+  it('kichik fayl: yangi kelganlar hisobot kuni bo\'yicha o\'zi aniqlanadi — savolsiz → yig\'ish va tekshiruv', async () => {
     await page.run((d: string) => { t().set('#sana', '2026-10-03'); t().file('#fileExp', d, 'synthetic-portal.xlsx'); }, b64(await portalFile(records, { inline: true })));
-    await page.run(() => t().wait("t.$('#yangiSon')", 'yangi kelganlar so\'rovi'));
-    expect(await page.run(() => t().ready())).toBe(false);
-    await shot('2-savol');
-    await page.run(() => { t().set('#yangiSon', '1'); (t().$('[data-act="confirmNew"]') as HTMLButtonElement).click(); });
     await page.run(() => t().wait('t.ready()', 'fayl tayyor'));
+    expect(await page.run(() => !!t().$('#yangiSon'))).toBe(false);
     const text = await page.run(() => t().text());
+    expect(text).toContain('Yangi kelganlar: 1 ta');
+    expect(text).toContain('hisobot kuni kelganlar');
     expect(text).toContain('tekshiruvdan o\'tdi');
     expect(text).toContain('Жараёндаги мурожаатлар 03.10.2026й.xlsx');
     await shot('3-tayyor');
@@ -201,8 +200,6 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await page.run(() => t().wait("t.text().includes('Fayl o\\'qilmadi')", 'xato xabari'));
     expect(await page.run(() => t().ready())).toBe(false);
     await page.run((d: string) => t().file('#fileExp', d, 'recovery.xlsx'), b64(await portalFile(records, { inline: true })));
-    await page.run(() => t().wait("t.$('#yangiSon')", 'qayta so\'rov'));
-    await page.run(() => { t().set('#yangiSon', '0'); (t().$('[data-act="confirmNew"]') as HTMLButtonElement).click(); });
     await page.run(() => t().wait("t.ready() && t.text().includes('03.10.2026й.xlsx')", 'tiklangan fayl'));
     await page.run(() => (t().$('#prevClear') as HTMLButtonElement).click());
     await page.run(() => t().wait("t.ready() && !t.$('#prevClear')", 'solishtirish olib tashlandi'));
@@ -216,11 +213,11 @@ describe('brauzerda: jarayon-svodi.html', () => {
     await page.run(() => t().wait("t.$('#un-0')", 'noma\'lum tasnif so\'rovi'));
     await shot('5-yangi-tasnif');
     await page.run(() => { t().set('#un-0', 'ЭГХУ'); (t().$('[data-act="saveUnknown"]') as HTMLButtonElement).click(); });
-    await page.run(() => t().wait("!t.$('#un-0') && t.$('#yangiSon')", 'qoida qabul qilindi'));
+    await page.run(() => t().wait("!t.$('#un-0') && t.ready()", 'qoida qabul qilindi'));
     await open();                                                           // sahifani qayta ochish
     expect(await page.run(() => t().text())).toContain('Oxirgi svod');   // oxirgi tayyor svod bosh sahifada
     await page.run((d: string) => { t().set('#sana', '2026-10-03'); t().file('#fileExp', d, 'yangi-tasnif.xlsx'); }, data);
-    await page.run(() => t().wait("t.$('#yangiSon')", 'qayta ochilgandan keyin'));
+    await page.run(() => t().wait("t.ready()", 'qayta ochilgandan keyin'));
     expect(await page.run(() => !!t().$('#un-0'))).toBe(false);
   });
 
@@ -239,8 +236,6 @@ describe('brauzerda: jarayon-svodi.html', () => {
 
   it('bosh sahifadagi «Oxirgi svod»ni o\'chirish', async () => {
     await page.run((d: string) => { t().set('#sana', '2026-10-03'); t().file('#fileExp', d, 'svod.xlsx'); }, b64(await portalFile(records, { inline: true })));
-    await page.run(() => t().wait("t.$('#yangiSon')", 'savol'));
-    await page.run(() => { t().set('#yangiSon', '1'); (t().$('[data-act="confirmNew"]') as HTMLButtonElement).click(); });
     await page.run(() => t().wait('t.ready()', 'tayyor'));
     await open();
     await page.run(() => t().wait("t.$('#lastClear')", 'oxirgi svod'));
@@ -281,8 +276,8 @@ describe('brauzerda: jarayon-svodi.html', () => {
       await t().wait('t.ready()', 'katta fayl tayyor', 90000);
       const ready = performance.now() - t0;
       const t1 = performance.now();
-      t().set('#sana', '2026-10-01');
-      await t().wait("t.ready() && t.text().includes('01.10.2026й.xlsx')", 'sana o\'zgargach', 90000);
+      t().set('#sana', '2026-10-03');
+      await t().wait("t.ready() && t.text().includes('03.10.2026й.xlsx')", 'sana o\'zgargach', 90000);
       const redo = performance.now() - t1;
       await new Promise(res => setTimeout(res, 100));
       obs.disconnect();

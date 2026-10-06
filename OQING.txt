@@ -6,9 +6,10 @@ ISHLATISH
 2. Portal ro'yxati yozilgan Excel (.xlsx) faylni sahifaga tashlang.
 3. "Excel faylni saqlash" tugmasini bosing - tayyor fayl yuklanadi.
 
-- Yangi kelganlar sanaga qarab o'zi aniqlanadi. Ro'yxat kuni = undagi eng oxirgi yangilanish sanasi.
+- Yangi kelgan = «Ижрога йўналтирилган сана» hisobot kuni (sahifadagi sana) bo'lgan murojaatlar.
+  Ular ro'yxat oxiriga o'tkaziladi, soni ilova tomonidan o'zi hisoblanadi (so'ralmaydi).
   Ro'yxat hisobot kunidan eski bo'lsa (masalan, kechagi fayl bugungi sana bilan), o'sha kuni hech
-  narsa kelmagan bo'ladi: "Yangi kelgan" 0 ta, pastdagi ro'yxat oddiy qator bo'lib qoladi.
+  narsa kelmagan bo'ladi: "Yangi kelgan" 0 ta.
   Kechagi hisobot kerak bo'lsa - "sanani ... qilish" havolasini bosing.
 - Portalning TO'LIQ HISOBOTINI ham tashlash mumkin ("Танланган ташкилотнинг масалалари рўйхати",
   56 ustunli, hamma holatdagi murojaatlar bilan). Undan faqat "Жараёнда" va "Янги" holatidagi,

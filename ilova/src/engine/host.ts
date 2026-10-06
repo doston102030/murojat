@@ -2,7 +2,7 @@
    Odatda Web Worker ichida ishlaydi (worker.ts); Worker ochilmasa — asosiy oqimda (zaxira yo'l).
    Har bir so'rovda id/seq bor: eskirgan javob hech qachon yangi holatni bosib ketmaydi. */
 import {
-  classify, compare, detectByDay, detectNew, dedupe, findDuplicates, fmtSerial, norm, rulesMap, svod,
+  classify, compare, detectByDay, detectNew, dedupe, findDuplicates, fmtSerial, norm, rulesMap, splitByDay, svod,
   type Row, type Table, type Svod,
 } from './core';
 import { build, readTable, verify } from './xlsx';
@@ -86,11 +86,15 @@ export function createHost(post: Post) {
     latestSeq = q.seq;
     const exp = slots.exp, prev = slots.prev;
     if (!exp || exp.id !== q.expId || (prev ? prev.id : null) !== q.prevId) return;   // holat o'zgargan — eskirgan so'rov
-    const rows = exp.rows;
+    const rows = exp.rows;                                         // ko'rsatilgan tartib (toifa, belgi, solishtirish shunga tayanadi)
+    // Oddiy ro'yxatda yangi kelganlar (hisobot kuni yo'naltirilgan) pastga o'tkaziladi: yig'ilgan faylda ular oxirida turadi
+    const ordered = exp.table.full ? rows : splitByDay(rows, q.date).rows;
+    const newCount = Math.max(0, Math.min(q.newCount, rows.length));
+    const newSet = new Set(ordered.slice(rows.length - newCount));
+    const newFlags = new Uint8Array(rows.map(r => (newSet.has(r) ? 1 : 0)));
     const unknown = classify(rows, rulesMap(q.rules));
     const dups = findDuplicates(rows);
-    const newCount = Math.max(0, Math.min(q.newCount, rows.length));
-    const preview = unknown.length ? null : svodView(svod(rows, newCount));
+    const preview = unknown.length ? null : svodView(svod(ordered, newCount));
     const catNames: string[] = [], catPos = new Map<string, number>(), rowCat = new Int32Array(rows.length);
     rows.forEach((r, i) => {
       if (!r.cat) { rowCat[i] = -1; return; }
@@ -100,15 +104,15 @@ export function createHost(post: Post) {
     });
     const willBuild = !exp.table.problems.length && !unknown.length && !dups.length && q.confirmed;
     const analysis: Analysis = {
-      seq: q.seq, unknown, kinds: new Set(rows.map(r => norm(r.tasnif))).size, preview, catNames, rowCat,
+      seq: q.seq, unknown, kinds: new Set(rows.map(r => norm(r.tasnif))).size, preview, catNames, rowCat, newFlags,
       dups: { count: dups.length, list: dups.slice(0, 12).map(d => ({ id: d.again.id, task: d.again.task, firstR: d.first.r, againR: d.again.r })) },
       cmp: prev ? cmpView(prev.rows, rows) : null, willBuild,
     };
-    post({ t: 'analysis', seq: q.seq, analysis }, [rowCat.buffer]);
+    post({ t: 'analysis', seq: q.seq, analysis }, [rowCat.buffer, newFlags.buffer]);
     if (!willBuild) return;
 
     // Toifalar shu paytdagi holicha muzlatiladi: keyingi so'rov qatorlarni qayta tasniflasa ham bu yig'ish buzilmaydi
-    const model = { rows: rows.map(r => ({ ...r })), newCount, date: q.date, printer: exp.table.printer };
+    const model = { rows: ordered.map(r => ({ ...r })), newCount, date: q.date, printer: exp.table.printer };
     await tick();
     if (q.seq !== latestSeq) return;
     try {

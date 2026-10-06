@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
 import {
-  BASE_RULES, EngineError, classify, compare, dateLabels, detectByDay, detectNew, findDuplicates, dedupe, rulesMap, svod, textToSerial, fmtSerial,
+  BASE_RULES, EngineError, classify, compare, dateLabels, detectByDay, detectNew, findDuplicates, dedupe, rulesMap, splitByDay, svod, textToSerial, fmtSerial, ORG_ORDER, type Row,
 } from '../src/engine/core';
 import { build, readTable, verify } from '../src/engine/xlsx';
 import { parse, sax, findAll, textOf, nsAttr, XmlError } from '../src/engine/xml';
@@ -26,6 +26,15 @@ describe('sana yorliqlari', () => {
   });
   it('yaroqsiz sana bilan yig\'ish fayl chiqarmaydi', async () => {
     await expect(build({ rows: [], newCount: 0, date: '2026-02-30', printer: null })).rejects.toThrow(EngineError);
+  });
+});
+
+describe('svod tashkilotlari tartibi', () => {
+  it('shablon tartibi: 18 ta qator har doim, ma\'lumotda yo\'qlari 0 bilan; noma\'lumlari oxirida', () => {
+    const orgs = ['"Қорасувшаҳаргаз" газ таъминоти бўлими', '"Номаълум" газ таъминоти бўлими', '"Андижонтумангаз" газ таъминоти бўлими',
+      '"Ҳудудгаз Андижон" газ таъминоти филиали', '"Андижоншаҳаргаз" газ таъминоти бўлими', '"Бир" газ таъминоти бўлими'];
+    const rows = orgs.map((org, i) => ({ org, cat: 'Toifa', red: false, m: i }) as unknown as Row);
+    expect(svod(rows, 0).orgs).toEqual([...ORG_ORDER, '"Бир" газ таъминоти бўлими', '"Номаълум" газ таъминоти бўлими']);
   });
 });
 
@@ -151,14 +160,19 @@ describe('portalning to\'liq hisoboti', () => {
 });
 
 describe('tahlil', () => {
-  it('yangi kelganlarni sana tartibi qayta boshlanganidan topadi', async () => {
+  it('yangi kelganlar — hisobot kuni yo\'naltirilganlar: kunlar bo\'yicha sanaladi', async () => {
     const t = await readTable(await portalFile(portalRows(40, 6)), 'P');
-    const d = detectNew(t.rows);
-    expect(d).toMatchObject({ kind: 'restart', count: 6, sure: true, boundaryRow: 4 + 34 });
+    expect(detectNew(t.rows)).toMatchObject({ kind: 'day', sure: true, days: { '2026-10-03': 6 } });
   });
-  it('sana tartibi uzilmasa — foydalanuvchidan so\'raladi', async () => {
-    const t = await readTable(await portalFile(portalRows(10, 0), { tableEndAt: [6] }), 'P');
-    expect(detectNew(t.rows)).toMatchObject({ kind: 'ends', sure: false, count: 3 });
+
+  it('hisobot kuni yo\'naltirilgan qatorlar — ro\'yxat oxirida, qolganlarining tartibi saqlanadi', async () => {
+    const rows = portalRows(10, 0);
+    rows[2][12] = day('2026-10-03', 10);                                 // o'rtadagi qator bugungi
+    const t = await readTable(await portalFile(rows), 'P');
+    const s = splitByDay(t.rows, '2026-10-03');
+    expect(s.count).toBe(1);
+    expect(s.rows.map(r => r.id)).toEqual([...t.rows.filter((_, i) => i !== 2).map(r => r.id), t.rows[2].id]);
+    expect(splitByDay(t.rows, '2026-10-04')).toEqual({ rows: t.rows, count: 0 });
   });
   it('noma\'lum tasnif va takrorlar', async () => {
     const rows = portalRows(6, 0);
@@ -209,12 +223,12 @@ describe('Excel yig\'ish va tekshirish', () => {
     const s3 = await zip.file('xl/worksheets/sheet3.xml')!.async('string');
     zip.file('xl/worksheets/sheet3.xml', s3.replace('<c r="D5" s="16"><v>1</v></c>', '<c r="D5" s="16"><v>2</v></c>'));
     const s2 = await zip.file('xl/worksheets/sheet2.xml')!.async('string');
-    const m = /<c r="([B-Z])5" s="20"><v>(\d+)/.exec(s2)!;           // 5-qatordagi birinchi to'ldirilgan katak
-    zip.file('xl/worksheets/sheet2.xml', s2.replace(m[0], `<c r="${m[1]}5" s="20"><v>${Number(m[2]) + 1}`));
+    const m = /<c r="([B-Z])(\d+)" s="20"><v>(\d+)/.exec(s2)!;        // birinchi to'ldirilgan katak (qatori tashkilotlar tartibiga bog'liq)
+    zip.file('xl/worksheets/sheet2.xml', s2.replace(m[0], `<c r="${m[1]}${m[2]}" s="20"><v>${Number(m[3]) + 1}`));
     const v = await verify(await zip.generateAsync({ type: 'uint8array' }), model);
     expect(v.ok).toBe(false);
     expect(v.errors.join('\n')).toMatch(/жараён \(2\): 5-qator manbaga teng emas/);
-    expect(v.errors.join('\n')).toContain(`Лист2: ${m[1]}5 da ${Number(m[2]) + 1}`);
+    expect(v.errors.join('\n')).toContain(`Лист2: ${m[1]}${m[2]} da ${Number(m[3]) + 1}`);
   });
 
   it('yangi kelganlar soni noto\'g\'ri yoki toifa yo\'q bo\'lsa — yig\'ilmaydi', async () => {

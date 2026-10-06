@@ -135,6 +135,7 @@ export const RowsPane = memo(function RowsPane({ rows, newFrom, analysis, kind =
     const { rowCat, catNames } = analysis;
     return (i: number) => (rowCat[i] >= 0 ? catNames[rowCat[i]] : null);
   }, [analysis, rows.length]);
+  const newAt = (i: number) => (analysis && analysis.newFlags.length === rows.length ? analysis.newFlags[i] === 1 : i >= newFrom);
 
   const n = rows.length;
   const first = Math.max(0, Math.floor(top / ROW_H) - OVERSCAN);
@@ -142,7 +143,7 @@ export const RowsPane = memo(function RowsPane({ rows, newFrom, analysis, kind =
   const slice = [];
   const src = kind === 'src', cols = COL_W[kind];
   for (let i = first; i < last; i++) {
-    const r = rows[i], nw = i >= newFrom, cat = catOf(i);
+    const r = rows[i], nw = newAt(i), cat = catOf(i);
     const id = <td className="id" title={r.id}>{r.linkA ? <a href={r.linkA} target="_blank" rel="noopener noreferrer">{r.id}</a> : r.id}{nw ? <span className="tag">янги</span> : null}</td>;
     const catTd = <td title={cat ?? ''}>{cat ?? <span className="muted">?</span>}</td>;
     slice.push(src ? (
